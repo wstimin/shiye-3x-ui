@@ -1,0 +1,13 @@
+.portal-management-content { display: grid; gap: 16px; }
+.portal-management-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.portal-management-heading h2 { margin: 4px 0 3px; }
+.portal-management-heading p { margin: 0; color: var(--text-secondary, #7a8799); }
+.portal-management-kicker { color: #2563eb; font-size: 11px; font-weight: 750; letter-spacing: .12em; }
+.portal-management-card { border-radius: 16px; }
+.portal-management-summary { height: 100%; background: linear-gradient(145deg, #f3f8ff, #f8fdff); }
+.portal-management-summary .ant-statistic-content { color: #1e56c8; }
+.portal-generated-codes { margin-top: 18px; padding-top: 14px; border-top: 1px solid #e8eef7; }
+@media (max-width: 700px) {
+  .portal-management-heading { align-items: stretch; flex-direction: column; }
+  .portal-management-heading .ant-btn { align-self: flex-start; }
+}

@@ -1,0 +1,92 @@
+---
+title: Customer Portal
+description: 'Customer self-service portal: admin-managed logins bound to client
+  emails, pure-amount recharge codes, and balance-charged renewal. Logins are
+  per-client username+password pairs; codes carry only an amount and redeem into
+  balance. Portal sessions use a separate cookie from the admin session.'
+full: true
+_openapi:
+  preload:
+    - ./public/openapi.json
+  toc:
+    - depth: 2
+      title: List portal logins newest first. Responses carry username, email, balance
+        and enable flag — never password hashes.
+      url: '#list-portal-logins-newest-first-responses-carry-username-email-balance-and-enable-flag--never-password-hashes'
+    - depth: 2
+      title: Bind a portal login to an existing client email. The email must already
+        exist as a client; the username must be unique.
+      url: '#bind-a-portal-login-to-an-existing-client-email-the-email-must-already-exist-as-a-client-the-username-must-be-unique'
+    - depth: 2
+      title: 'Update a portal login: rotate its password and/or flip the enable
+        switch. A password change bumps the login epoch so live portal sessions
+        drop.'
+      url: '#update-a-portal-login-rotate-its-password-andor-flip-the-enable-switch-a-password-change-bumps-the-login-epoch-so-live-portal-sessions-drop'
+    - depth: 2
+      title: Delete a portal login and its wallet ledger rows. The xray client itself
+        is untouched.
+      url: '#delete-a-portal-login-and-its-wallet-ledger-rows-the-xray-client-itself-is-untouched'
+    - depth: 2
+      title: Mint a batch of pure-amount recharge codes. Only SHA-256 hashes persist;
+        the plaintext codes are returned once for display/export.
+      url: '#mint-a-batch-of-pure-amount-recharge-codes-only-sha-256-hashes-persist-the-plaintext-codes-are-returned-once-for-displayexport'
+    - depth: 2
+      title: List coupon batches newest first. Responses carry amount, status, batch
+        and redemption metadata — never code hashes or plaintext.
+      url: '#list-coupon-batches-newest-first-responses-carry-amount-status-batch-and-redemption-metadata--never-code-hashes-or-plaintext'
+    - depth: 2
+      title: Void an unused recharge code so it can never be redeemed.
+      url: '#void-an-unused-recharge-code-so-it-can-never-be-redeemed'
+    - depth: 2
+      title: 'Read the portal billing settings: per-day price in cents, plan presets,
+        third-party purchase URL and site title.'
+      url: '#read-the-portal-billing-settings-per-day-price-in-cents-plan-presets-third-party-purchase-url-and-site-title'
+    - depth: 2
+      title: Persist the portal billing settings. The purchase URL must be http(s); an
+        empty value clears it.
+      url: '#persist-the-portal-billing-settings-the-purchase-url-must-be-https-an-empty-value-clears-it'
+  structuredData:
+    headings:
+      - content: List portal logins newest first. Responses carry username, email,
+          balance and enable flag — never password hashes.
+        id: list-portal-logins-newest-first-responses-carry-username-email-balance-and-enable-flag--never-password-hashes
+      - content: Bind a portal login to an existing client email. The email must already
+          exist as a client; the username must be unique.
+        id: bind-a-portal-login-to-an-existing-client-email-the-email-must-already-exist-as-a-client-the-username-must-be-unique
+      - content: 'Update a portal login: rotate its password and/or flip the enable
+          switch. A password change bumps the login epoch so live portal
+          sessions drop.'
+        id: update-a-portal-login-rotate-its-password-andor-flip-the-enable-switch-a-password-change-bumps-the-login-epoch-so-live-portal-sessions-drop
+      - content: Delete a portal login and its wallet ledger rows. The xray client
+          itself is untouched.
+        id: delete-a-portal-login-and-its-wallet-ledger-rows-the-xray-client-itself-is-untouched
+      - content: Mint a batch of pure-amount recharge codes. Only SHA-256 hashes
+          persist; the plaintext codes are returned once for display/export.
+        id: mint-a-batch-of-pure-amount-recharge-codes-only-sha-256-hashes-persist-the-plaintext-codes-are-returned-once-for-displayexport
+      - content: List coupon batches newest first. Responses carry amount, status, batch
+          and redemption metadata — never code hashes or plaintext.
+        id: list-coupon-batches-newest-first-responses-carry-amount-status-batch-and-redemption-metadata--never-code-hashes-or-plaintext
+      - content: Void an unused recharge code so it can never be redeemed.
+        id: void-an-unused-recharge-code-so-it-can-never-be-redeemed
+      - content: 'Read the portal billing settings: per-day price in cents, plan
+          presets, third-party purchase URL and site title.'
+        id: read-the-portal-billing-settings-per-day-price-in-cents-plan-presets-third-party-purchase-url-and-site-title
+      - content: Persist the portal billing settings. The purchase URL must be http(s);
+          an empty value clears it.
+        id: persist-the-portal-billing-settings-the-purchase-url-must-be-https-an-empty-value-clears-it
+    contents: []
+---
+
+{/* This file was generated by Fumadocs. Do not edit this file directly. Any changes should be made by running the generation command again. */}
+
+export default function Layout(props) {
+  const { APIPage, OpenAPIPage } = props.components ?? {};
+  // "APIPage" is the old name from v10, this allows both for backward compatibility
+  const Comp = OpenAPIPage ?? APIPage;
+  return (
+    <>
+      {props.children}
+      <Comp document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/portal/customers","method":"get"},{"path":"/panel/api/portal/customers","method":"post"},{"path":"/panel/api/portal/customers/{username}","method":"post"},{"path":"/panel/api/portal/customers/{username}/delete","method":"post"},{"path":"/panel/api/portal/coupons/generate","method":"post"},{"path":"/panel/api/portal/coupons","method":"get"},{"path":"/panel/api/portal/coupons/{id}/disable","method":"post"},{"path":"/panel/api/portal/billing","method":"get"},{"path":"/panel/api/portal/billing","method":"post"}]} showTitle />
+    </>
+  );
+}
