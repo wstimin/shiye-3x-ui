@@ -23,7 +23,11 @@ export function usePageTitle() {
 
   useEffect(() => {
     const key = TITLE_KEYS[pathname];
-    const title = key ? (key === 'menu.portalManagement' ? t(key, '客户门户管理') : t(key)) : '3X-UI';
+    const title = key
+      ? key === 'menu.portalManagement'
+        ? t(key, '客户门户管理')
+        : t(key)
+      : '3X-UI';
     const host = window.location.hostname;
     document.title = host ? `${host} - ${title}` : title;
   }, [pathname, t]);

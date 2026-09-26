@@ -409,6 +409,7 @@ func (s *SettingService) SetPortalSiteTitle(title string) error {
 func (s *SettingService) GetPortalCardProviderURL() (string, error) {
 	return s.getString(PortalCardProviderURLKey)
 }
+
 func (s *SettingService) SetPortalCardProviderURL(v string) error {
 	clean, err := SanitizeHTTPURL(v)
 	if err != nil {

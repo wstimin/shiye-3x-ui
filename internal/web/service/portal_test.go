@@ -122,7 +122,7 @@ func TestRedeemCoupon(t *testing.T) {
 func TestRenewCustomer(t *testing.T) {
 	setupPortalDB(t)
 	svc, inboundSvc := ClientService{}, InboundService{}
-	if err := (&SettingService{}).SetPortalPricePerDayCents(100); err != nil {
+	if err := (&SettingService{}).SetPortalPricePerMonthCents(100); err != nil {
 		t.Fatalf("SetPortalPrice: %v", err)
 	}
 	// Expired client: renewal starts from now, not the past expiry.

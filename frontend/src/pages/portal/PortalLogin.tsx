@@ -80,17 +80,17 @@ export default function PortalLogin({ plans, onDone }: PortalLoginProps) {
     }
   };
 
-  const langMenuItems = (LanguageManager.supportedLanguages as { value: string; name: string; icon: string }[]).map(
-    (l) => ({
-      key: l.value,
-      label: (
-        <Space size={8}>
-          <span aria-hidden="true">{l.icon}</span>
-          <span>{l.name}</span>
-        </Space>
-      ),
-    }),
-  );
+  const langMenuItems = (
+    LanguageManager.supportedLanguages as { value: string; name: string; icon: string }[]
+  ).map((l) => ({
+    key: l.value,
+    label: (
+      <Space size={8}>
+        <span aria-hidden="true">{l.icon}</span>
+        <span>{l.name}</span>
+      </Space>
+    ),
+  }));
 
   const themeIcon = !isDark ? <SunOutlined /> : !isUltra ? <MoonOutlined /> : <MoonFilled />;
   const title = plans?.siteTitle || 'X用户中心';
@@ -146,7 +146,11 @@ export default function PortalLogin({ plans, onDone }: PortalLoginProps) {
               <h2 className="welcome">{t('portal.welcome')}</h2>
 
               <FormProvider {...methods}>
-                <Form layout="vertical" className="portal-form" onFinish={methods.handleSubmit(onSubmit)}>
+                <Form
+                  layout="vertical"
+                  className="portal-form"
+                  onFinish={methods.handleSubmit(onSubmit)}
+                >
                   <FormField
                     name="username"
                     label={t('username')}
@@ -175,7 +179,13 @@ export default function PortalLogin({ plans, onDone }: PortalLoginProps) {
                   </FormField>
 
                   <Form.Item className="submit-row">
-                    <Button type="primary" htmlType="submit" loading={submitting} size="large" block>
+                    <Button
+                      type="primary"
+                      htmlType="submit"
+                      loading={submitting}
+                      size="large"
+                      block
+                    >
                       {t('login')}
                     </Button>
                   </Form.Item>

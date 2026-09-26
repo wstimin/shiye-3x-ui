@@ -227,7 +227,11 @@ export default function AppSidebar() {
       { key: '/', icon: 'dashboard', title: t('menu.dashboard') },
       { key: '/inbounds', icon: 'inbound', title: t('menu.inbounds') },
       { key: '/clients', icon: 'team', title: t('menu.clients') },
-      { key: '/portal-management', icon: 'portalManagement', title: t('menu.portalManagement', '客户门户') },
+      {
+        key: '/portal-management',
+        icon: 'portalManagement',
+        title: t('menu.portalManagement', '客户门户'),
+      },
       { key: '/groups', icon: 'groups', title: t('menu.groups') },
       { key: '/nodes', icon: 'cluster', title: t('menu.nodes') },
       { key: '/hosts', icon: 'hosts', title: t('menu.hosts') },

@@ -36,7 +36,6 @@ type PortalController struct {
 	clientService  service.ClientService
 	inboundService service.InboundService
 	settingService service.SettingService
-	xrayService    service.XrayService
 }
 
 // NewPortalController registers portal page + API routes.
@@ -127,6 +126,7 @@ func (p *portalGinSession) Options(o sessions.Options) {
 	p.load().Options = o.ToGorillaOptions()
 	p.written = true
 }
+
 func (p *portalGinSession) Save() error {
 	if !p.written || p.sess == nil {
 		return nil

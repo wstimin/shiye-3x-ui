@@ -57,8 +57,18 @@ import './PortalPage.css';
 import '../sub/SubPage.css';
 
 const ACCENT = {
-  light: { primary: '#1677ff', hover: '#4096ff', active: '#0958d9', rail: 'rgba(22, 119, 255, 0.16)' },
-  dark: { primary: '#4998ff', hover: '#6cb0ff', active: '#2378e5', rail: 'rgba(73, 152, 255, 0.18)' },
+  light: {
+    primary: '#1677ff',
+    hover: '#4096ff',
+    active: '#0958d9',
+    rail: 'rgba(22, 119, 255, 0.16)',
+  },
+  dark: {
+    primary: '#4998ff',
+    hover: '#6cb0ff',
+    active: '#2378e5',
+    rail: 'rgba(73, 152, 255, 0.18)',
+  },
 };
 
 interface RenewState {
@@ -115,7 +125,9 @@ export default function PortalPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const pMsg = await HttpUtil.get<PortalPlans>('/portal/api/plans', undefined, { silent: true });
+      const pMsg = await HttpUtil.get<PortalPlans>('/portal/api/plans', undefined, {
+        silent: true,
+      });
       if (!cancelled && pMsg.success && pMsg.obj) setPlans(pMsg.obj as PortalPlans);
       const account = await fetchMe();
       if (cancelled) return;
@@ -200,10 +212,19 @@ export default function PortalPage() {
 
   const themeConfig = useMemo(() => {
     const accent = isDark ? ACCENT.dark : ACCENT.light;
-    const primary = { colorPrimary: accent.primary, colorPrimaryHover: accent.hover, colorPrimaryActive: accent.active };
+    const primary = {
+      colorPrimary: accent.primary,
+      colorPrimaryHover: accent.hover,
+      colorPrimaryActive: accent.active,
+    };
     return {
       ...buildAntdThemeConfig(false, false),
-      token: { ...antdThemeConfig.token, ...primary, colorLink: accent.primary, colorInfo: accent.primary },
+      token: {
+        ...antdThemeConfig.token,
+        ...primary,
+        colorLink: accent.primary,
+        colorInfo: accent.primary,
+      },
       components: {
         ...antdThemeConfig.components,
         Button: { ...antdThemeConfig.components?.Button, ...primary },
@@ -225,7 +246,10 @@ export default function PortalPage() {
   const expireMs = me?.expiryTime ?? 0;
   const heroData = useMemo(
     () => ({
-      status: resolveSubStatus({ enabled: true, usedByte: totalUsed, totalByte: totalQuota, expireMs }, nowMs),
+      status: resolveSubStatus(
+        { enabled: true, usedByte: totalUsed, totalByte: totalQuota, expireMs },
+        nowMs,
+      ),
       daysLeft: expireMs > 0 ? Math.max(0, Math.ceil((expireMs - nowMs) / 86_400_000)) : null,
       usedByte: totalUsed,
       totalByte: totalQuota,
@@ -255,9 +279,27 @@ export default function PortalPage() {
   const subRows = useMemo(() => {
     if (!subs) return [];
     return [
-      { kind: 'SUB', color: 'green', url: subs.subUrl ?? '', title: siteTitle, downloadable: false },
-      { kind: 'JSON', color: 'purple', url: subs.subJsonUrl ?? '', title: `${siteTitle} JSON`, downloadable: true },
-      { kind: 'CLASH', color: 'gold', url: subs.subClashUrl ?? '', title: 'Clash / Mihomo', downloadable: true },
+      {
+        kind: 'SUB',
+        color: 'green',
+        url: subs.subUrl ?? '',
+        title: siteTitle,
+        downloadable: false,
+      },
+      {
+        kind: 'JSON',
+        color: 'purple',
+        url: subs.subJsonUrl ?? '',
+        title: `${siteTitle} JSON`,
+        downloadable: true,
+      },
+      {
+        kind: 'CLASH',
+        color: 'gold',
+        url: subs.subClashUrl ?? '',
+        title: 'Clash / Mihomo',
+        downloadable: true,
+      },
     ].filter((row) => row.url);
   }, [subs, siteTitle]);
 
@@ -284,7 +326,12 @@ export default function PortalPage() {
                   </div>
                 </div>
                 <div className="sub-row-actions">
-                  <Button icon={<CopyOutlined />} onClick={() => copy(row.url)} aria-label={t('copy')} title={t('copy')} />
+                  <Button
+                    icon={<CopyOutlined />}
+                    onClick={() => copy(row.url)}
+                    aria-label={t('copy')}
+                    title={t('copy')}
+                  />
                   {row.downloadable && (
                     <Button
                       href={`${row.url}${row.url.includes('?') ? '&' : '?'}view=raw`}
@@ -307,7 +354,13 @@ export default function PortalPage() {
         key: 'apps',
         icon: <QrcodeOutlined />,
         label: t('subscription.tabApps'),
-        children: <SubAppsTab apps={apps} initialPlatform={initialPlatform} onOpen={(url) => window.open(url, '_blank')} />,
+        children: (
+          <SubAppsTab
+            apps={apps}
+            initialPlatform={initialPlatform}
+            onOpen={(url) => window.open(url, '_blank')}
+          />
+        ),
       });
     }
     if (subs && subs.links.length > 0) {
@@ -338,138 +391,224 @@ export default function PortalPage() {
       {messageContextHolder}
       <Layout className={pageClass} dir={direction}>
         <aside className="portal-sidebar" aria-label="X用户中心导航">
-          <div className="sidebar-brand"><span className="sidebar-logo">X</span><span>X用户中心</span></div>
+          <div className="sidebar-brand">
+            <span className="sidebar-logo">X</span>
+            <span>X用户中心</span>
+          </div>
           <nav className="sidebar-nav">
-            <button className="sidebar-nav-item is-active"><HomeOutlined />概览</button>
-            <button className="sidebar-nav-item"><ThunderboltFilled />我的节点<span className="sidebar-count">{nodes.length}</span></button>
-            <button className="sidebar-nav-item"><WalletOutlined />余额与续期</button>
-            <button className="sidebar-nav-item"><SafetyCertificateOutlined />安全设置</button>
+            <button className="sidebar-nav-item is-active">
+              <HomeOutlined />
+              概览
+            </button>
+            <button className="sidebar-nav-item">
+              <ThunderboltFilled />
+              我的节点<span className="sidebar-count">{nodes.length}</span>
+            </button>
+            <button className="sidebar-nav-item">
+              <WalletOutlined />
+              余额与续期
+            </button>
+            <button className="sidebar-nav-item">
+              <SafetyCertificateOutlined />
+              安全设置
+            </button>
           </nav>
-          <div className="sidebar-help"><div className="sidebar-help-icon"><CustomerServiceOutlined /></div><strong>需要帮助？</strong><span>联系客服获取支持</span><a href={plans?.purchaseUrl || '#'} target="_blank" rel="noopener noreferrer">联系支持 →</a></div>
+          <div className="sidebar-help">
+            <div className="sidebar-help-icon">
+              <CustomerServiceOutlined />
+            </div>
+            <strong>需要帮助？</strong>
+            <span>联系客服获取支持</span>
+            <a href={plans?.purchaseUrl || '#'} target="_blank" rel="noopener noreferrer">
+              联系支持 →
+            </a>
+          </div>
           <div className="sidebar-version">X Center · v1.0</div>
         </aside>
         <Layout className="portal-main">
           <header className="portal-topbar">
-            <div><span className="portal-kicker">客户中心 / 概览</span><h1>账户总览</h1></div>
-            <div className="portal-topbar-user"><Avatar size={40} icon={<UserOutlined />} /><div><b>{me.username}</b><span>账户正常</span></div><Button type="text" icon={<SettingOutlined />} aria-label="账户设置" /></div>
+            <div>
+              <span className="portal-kicker">客户中心 / 概览</span>
+              <h1>账户总览</h1>
+            </div>
+            <div className="portal-topbar-user">
+              <Avatar size={40} icon={<UserOutlined />} />
+              <div>
+                <b>{me.username}</b>
+                <span>账户正常</span>
+              </div>
+              <Button type="text" icon={<SettingOutlined />} aria-label="账户设置" />
+            </div>
           </header>
-        <Layout.Content className="portal-content-wrap">
-          <Card className="portal-card-main">
-            <header className="portal-header">
-              <div className="portal-brand">
-                <span className="portal-brand-title" dir="auto">{siteTitle}</span>
-                <div className="portal-brand-id">
-                  <bdi>{me.email}</bdi>
-                </div>
-              </div>
-              <div className="portal-toolbar">
-                <Segmented
-                  value={lang}
-                  onChange={(v) => onLangChange(String(v))}
-                  options={LanguageManager.supportedLanguages.map((l) => ({
-                    value: l.value,
-                    label: (
-                      <span title={l.name} aria-label={l.name}>
-                        {l.icon}
-                      </span>
-                    ),
-                  }))}
-                />
-                <Button size="small" onClick={onLogout}>
-                  {t('logout')}
-                </Button>
-              </div>
-            </header>
-
-            <div className="portal-welcome-strip"><div><span className="portal-welcome-label">欢迎回来</span><h2>{me.username}，今天也要保持连接</h2><p>你的专属服务运行良好，所有节点都在实时守护。</p></div><div className="portal-welcome-orb"><ThunderboltFilled /></div></div>
-            <SubHero {...heroData} lang={lang} />
-
-            <div className="portal-balance-row">
-              <Card size="small" className="portal-balance-card">
-                <Statistic
-                  title={t('portal.balance')}
-                  value={formatCents(balance)}
-                  prefix={<WalletOutlined />}
-                />
-              </Card>
-              <Card size="small" className="portal-balance-card">
-                <Statistic
-                  title={t('subscription.expiry')}
-                  value={expireMs > 0 ? IntlUtil.formatDate(expireMs, 'gregorian', lang) : t('subscription.noExpiry')}
-                />
-              </Card>
-            </div>
-
-            <div className="portal-actions">
-              <Button type="primary" icon={<ClockCircleOutlined />} onClick={() => setRenew((r) => ({ ...r, open: true }))}>
-                {t('portal.renew')}
-              </Button>
-              <Button icon={<ReloadOutlined />} onClick={refresh}>
-                {t('refresh')}
-              </Button>
-            </div>
-
-            {nodes.length > 0 && (
-              <section className="portal-section">
-                <div className="portal-section-heading"><div><span className="portal-section-eyebrow">LIVE CONNECTIONS</span><h3>{t('portal.myNodes')}</h3></div><Tag color="green">{runningNodes} 个运行中</Tag></div>
-                {nodes.map((n) => (
-                  <div key={`${n.protocol}-${n.remark}`} className="portal-node-row">
-                    <span className="portal-node-icon"><ThunderboltFilled /></span><div className="portal-node-main"><span className="portal-node-remark" dir="auto">{n.remark}</span><span className="portal-node-protocol">{n.protocol} · 加密连接</span></div>
-                    <span className="portal-node-pulse"><i />运行中</span>
-                    {!n.enable && <Tag color="red">{t('disabled')}</Tag>}
+          <Layout.Content className="portal-content-wrap">
+            <Card className="portal-card-main">
+              <header className="portal-header">
+                <div className="portal-brand">
+                  <span className="portal-brand-title" dir="auto">
+                    {siteTitle}
+                  </span>
+                  <div className="portal-brand-id">
+                    <bdi>{me.email}</bdi>
                   </div>
-                ))}
-              </section>
-            )}
+                </div>
+                <div className="portal-toolbar">
+                  <Segmented
+                    value={lang}
+                    onChange={(v) => onLangChange(String(v))}
+                    options={LanguageManager.supportedLanguages.map((l) => ({
+                      value: l.value,
+                      label: (
+                        <span title={l.name} aria-label={l.name}>
+                          {l.icon}
+                        </span>
+                      ),
+                    }))}
+                  />
+                  <Button size="small" onClick={onLogout}>
+                    {t('logout')}
+                  </Button>
+                </div>
+              </header>
 
-            {tabs.length > 0 && <Tabs className="portal-tabs" tabBarGutter={24} items={tabs} />}
+              <div className="portal-welcome-strip">
+                <div>
+                  <span className="portal-welcome-label">欢迎回来</span>
+                  <h2>{me.username}，今天也要保持连接</h2>
+                  <p>你的专属服务运行良好，所有节点都在实时守护。</p>
+                </div>
+                <div className="portal-welcome-orb">
+                  <ThunderboltFilled />
+                </div>
+              </div>
+              <SubHero {...heroData} lang={lang} />
 
-            <section className="portal-section">
-              <h3>{t('portal.recharge')}</h3>
-              <div className="portal-recharge-row">
-                <Input
-                  value={redeemCode}
-                  onChange={(e) => setRedeemCode(e.target.value)}
-                  placeholder={t('portal.codePlaceholder')}
-                  onPressEnter={onRedeem}
-                />
-                <Button type="primary" loading={redeeming} onClick={onRedeem}>
-                  {t('portal.redeem')}
+              <div className="portal-balance-row">
+                <Card size="small" className="portal-balance-card">
+                  <Statistic
+                    title={t('portal.balance')}
+                    value={formatCents(balance)}
+                    prefix={<WalletOutlined />}
+                  />
+                </Card>
+                <Card size="small" className="portal-balance-card">
+                  <Statistic
+                    title={t('subscription.expiry')}
+                    value={
+                      expireMs > 0
+                        ? IntlUtil.formatDate(expireMs, 'gregorian', lang)
+                        : t('subscription.noExpiry')
+                    }
+                  />
+                </Card>
+              </div>
+
+              <div className="portal-actions">
+                <Button
+                  type="primary"
+                  icon={<ClockCircleOutlined />}
+                  onClick={() => setRenew((r) => ({ ...r, open: true }))}
+                >
+                  {t('portal.renew')}
+                </Button>
+                <Button icon={<ReloadOutlined />} onClick={refresh}>
+                  {t('refresh')}
                 </Button>
               </div>
-              {plans?.purchaseUrl && (
-                <div className="portal-purchase-card">
-                  <div className="portal-purchase-icon"><CustomerServiceOutlined /></div>
-                  <div className="portal-purchase-copy"><strong>购买卡密</strong><span>前往官方购买页面，购买后回到这里输入卡密充值余额</span></div>
-                  <a className="portal-purchase-button" href={plans.purchaseUrl} target="_blank" rel="noopener noreferrer">立即购买 <RightOutlined /></a>
-                </div>
-              )}
-            </section>
 
-            {txns.length > 0 && (
-              <section className="portal-section">
-                <h3>{t('portal.history')}</h3>
-                <div className="portal-txns">
-                  {txns.slice(0, 20).map((txn) => (
-                    <div key={txn.id} className="portal-txn-row">
-                      <Tag color={txn.amountCents >= 0 ? 'green' : 'red'}>
-                        {txn.amountCents >= 0 ? '+' : ''}
-                        {formatCents(txn.amountCents)}
-                      </Tag>
-                      <span className="portal-txn-kind">{t(`portal.txn_${txn.kind}`, txn.kind)}</span>
-                      <span className="portal-txn-date">{IntlUtil.formatDate(txn.createdAt, 'gregorian', lang)}</span>
+              {nodes.length > 0 && (
+                <section className="portal-section">
+                  <div className="portal-section-heading">
+                    <div>
+                      <span className="portal-section-eyebrow">LIVE CONNECTIONS</span>
+                      <h3>{t('portal.myNodes')}</h3>
+                    </div>
+                    <Tag color="green">{runningNodes} 个运行中</Tag>
+                  </div>
+                  {nodes.map((n) => (
+                    <div key={`${n.protocol}-${n.remark}`} className="portal-node-row">
+                      <span className="portal-node-icon">
+                        <ThunderboltFilled />
+                      </span>
+                      <div className="portal-node-main">
+                        <span className="portal-node-remark" dir="auto">
+                          {n.remark}
+                        </span>
+                        <span className="portal-node-protocol">{n.protocol} · 加密连接</span>
+                      </div>
+                      <span className="portal-node-pulse">
+                        <i />
+                        运行中
+                      </span>
+                      {!n.enable && <Tag color="red">{t('disabled')}</Tag>}
                     </div>
                   ))}
-                </div>
-              </section>
-            )}
+                </section>
+              )}
 
-            {nodes.length === 0 && tabs.length === 0 && (
-              <Empty description={t('noData')} className="portal-empty" />
-            )}
-          </Card>
-        </Layout.Content>
-      </Layout>
+              {tabs.length > 0 && <Tabs className="portal-tabs" tabBarGutter={24} items={tabs} />}
+
+              <section className="portal-section">
+                <h3>{t('portal.recharge')}</h3>
+                <div className="portal-recharge-row">
+                  <Input
+                    value={redeemCode}
+                    onChange={(e) => setRedeemCode(e.target.value)}
+                    placeholder={t('portal.codePlaceholder')}
+                    onPressEnter={onRedeem}
+                  />
+                  <Button type="primary" loading={redeeming} onClick={onRedeem}>
+                    {t('portal.redeem')}
+                  </Button>
+                </div>
+                {plans?.purchaseUrl && (
+                  <div className="portal-purchase-card">
+                    <div className="portal-purchase-icon">
+                      <CustomerServiceOutlined />
+                    </div>
+                    <div className="portal-purchase-copy">
+                      <strong>购买卡密</strong>
+                      <span>前往官方购买页面，购买后回到这里输入卡密充值余额</span>
+                    </div>
+                    <a
+                      className="portal-purchase-button"
+                      href={plans.purchaseUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      立即购买 <RightOutlined />
+                    </a>
+                  </div>
+                )}
+              </section>
+
+              {txns.length > 0 && (
+                <section className="portal-section">
+                  <h3>{t('portal.history')}</h3>
+                  <div className="portal-txns">
+                    {txns.slice(0, 20).map((txn) => (
+                      <div key={txn.id} className="portal-txn-row">
+                        <Tag color={txn.amountCents >= 0 ? 'green' : 'red'}>
+                          {txn.amountCents >= 0 ? '+' : ''}
+                          {formatCents(txn.amountCents)}
+                        </Tag>
+                        <span className="portal-txn-kind">
+                          {t(`portal.txn_${txn.kind}`, txn.kind)}
+                        </span>
+                        <span className="portal-txn-date">
+                          {IntlUtil.formatDate(txn.createdAt, 'gregorian', lang)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {nodes.length === 0 && tabs.length === 0 && (
+                <Empty description={t('noData')} className="portal-empty" />
+              )}
+            </Card>
+          </Layout.Content>
+        </Layout>
       </Layout>
 
       <Modal
@@ -488,11 +627,16 @@ export default function PortalPage() {
             min={1}
             max={120}
             value={renew.customMonths ?? 1}
-            onChange={(v) => setRenew((r) => ({ ...r, customMonths: typeof v === 'number' ? v : null }))}
+            onChange={(v) =>
+              setRenew((r) => ({ ...r, customMonths: typeof v === 'number' ? v : null }))
+            }
           />
         </div>
         <p className="portal-renew-hint">
-          {t('portal.renewHint', { balance: formatCents(balance), cost: formatCents(selectedCost) })}
+          {t('portal.renewHint', {
+            balance: formatCents(balance),
+            cost: formatCents(selectedCost),
+          })}
         </p>
       </Modal>
     </ConfigProvider>
