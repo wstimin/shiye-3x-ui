@@ -105,9 +105,9 @@ export const PortalRedeemSchema = z.object({
 export type PortalLoginValues = z.infer<typeof PortalLoginSchema>;
 export type PortalRedeemValues = z.infer<typeof PortalRedeemSchema>;
 
-// Format cents as a decimal amount; currency symbol comes from the locale string.
+// Format the internal cent value as a Chinese yuan amount for customer-facing UI.
 export function formatCents(cents: number): string {
-  return (cents / 100).toFixed(2);
+  return `¥ ${(cents / 100).toFixed(2)}`;
 }
 
 export function planCostCents(months: number, pricePerMonthCents: number): number {

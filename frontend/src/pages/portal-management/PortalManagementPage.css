@@ -12,6 +12,7 @@
 .portal-management-summary .ant-statistic-content { color: #1e56c8; }
 .portal-management-summary .ant-statistic-content-prefix { color: #2563eb; }
 .portal-management-summary .ant-divider { border-color: #dbe8f6; margin: 14px 0; }
+.portal-open-link { margin-top: 12px; width: fit-content; }
 .portal-generated-codes { margin-top: 18px; padding-top: 14px; border-top: 1px solid #e8eef7; }
 @media (max-width: 700px) {
   .portal-management-heading { align-items: stretch; flex-direction: column; }

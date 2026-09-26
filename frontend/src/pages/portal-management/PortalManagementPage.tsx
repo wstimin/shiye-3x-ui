@@ -69,6 +69,10 @@ interface BillingValues {
   cardProviderSign: string;
 }
 
+interface BillingFormValues extends Omit<BillingValues, 'pricePerMonthCents'> {
+  pricePerMonthYuan: number;
+}
+
 interface CustomerFormValues {
   username: string;
   password: string;
@@ -77,7 +81,7 @@ interface CustomerFormValues {
 
 interface CouponFormValues {
   count: number;
-  amountCents: number;
+  amountYuan: number;
   prefix?: string;
   batchNo?: string;
   expiresAt?: number;
@@ -94,6 +98,8 @@ const emptyBilling: BillingValues = {
 };
 
 const money = (cents: number) => `¥ ${(cents / 100).toFixed(2)}`;
+const centsToYuan = (cents: number) => Number((cents / 100).toFixed(2));
+const yuanToCents = (yuan: number) => Math.round(Number(yuan) * 100);
 
 function apiObject<T>(result: { success?: boolean; obj?: unknown }, fallback: T): T {
   return result.success && result.obj !== undefined ? (result.obj as T) : fallback;
@@ -111,7 +117,7 @@ export default function PortalManagementPage() {
   const [savingBilling, setSavingBilling] = useState(false);
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [customerForm] = Form.useForm<CustomerFormValues>();
-  const [billingForm] = Form.useForm<BillingValues>();
+  const [billingForm] = Form.useForm<BillingFormValues>();
   const [couponForm] = Form.useForm<CouponFormValues>();
 
   useEffect(() => {
@@ -130,7 +136,12 @@ export default function PortalManagementPage() {
       ]);
       const nextBilling = { ...emptyBilling, ...apiObject<Partial<BillingValues>>(billingMsg, {}) };
       setBilling(nextBilling);
-      billingForm.setFieldsValue({ ...nextBilling, cardProviderSecret: '', cardProviderSign: '' });
+      billingForm.setFieldsValue({
+        ...nextBilling,
+        pricePerMonthYuan: centsToYuan(nextBilling.pricePerMonthCents),
+        cardProviderSecret: '',
+        cardProviderSign: '',
+      });
       setCustomers(apiObject<CustomerRow[]>(customerMsg, []));
       setCoupons(apiObject<CouponRow[]>(couponMsg, []));
     } finally {
@@ -145,12 +156,14 @@ export default function PortalManagementPage() {
     return () => window.clearTimeout(task);
   }, [load]);
 
-  const saveBilling = async (values: BillingValues) => {
+  const saveBilling = async (values: BillingFormValues) => {
+    const { pricePerMonthYuan, ...rest } = values;
+    const payload: BillingValues = { ...rest, pricePerMonthCents: yuanToCents(pricePerMonthYuan) };
     setSavingBilling(true);
     try {
-      const result = await HttpUtil.post('/panel/api/portal/billing', values, { silent: true });
+      const result = await HttpUtil.post('/panel/api/portal/billing', payload, { silent: true });
       if (!result.success) throw new Error(result.msg || '保存失败');
-      setBilling({ ...billing, ...values });
+      setBilling({ ...billing, ...payload });
       messageApi.success('门户设置已保存');
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : '保存失败');
@@ -192,7 +205,11 @@ export default function PortalManagementPage() {
   };
 
   const generateCoupons = async (values: CouponFormValues) => {
-    const result = await HttpUtil.post<{ codes: string[] }>('/panel/api/portal/coupons/generate', values, { silent: true });
+    const { amountYuan, ...rest } = values;
+    const result = await HttpUtil.post<{ codes: string[] }>('/panel/api/portal/coupons/generate', {
+      ...rest,
+      amountCents: yuanToCents(amountYuan),
+    }, { silent: true });
     if (!result.success || !result.obj) {
       messageApi.error(result.msg || '生成卡密失败');
       return;
@@ -257,12 +274,12 @@ export default function PortalManagementPage() {
             <Row gutter={[16, 16]} align="top" className="portal-management-top-row">
               <Col xs={24} xl={16}>
                 <Card title={<Space><SettingOutlined />门户计费与品牌</Space>} className="portal-management-card">
-                  <Form form={billingForm} layout="vertical" initialValues={billing} onFinish={(v) => void saveBilling(v)}>
+                  <Form form={billingForm} layout="vertical" onFinish={(v) => void saveBilling(v)}>
                     <Row gutter={16}>
-                      <Col xs={24} sm={8}><Form.Item label="每月价格（分）" name="pricePerMonthCents" rules={[{ required: true }]}><InputNumber min={0} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
+                      <Col xs={24} sm={8}><Form.Item label="每月价格（元）" name="pricePerMonthYuan" rules={[{ required: true, message: '请输入每月价格' }]} extra="页面按元显示，系统内部换算为分保存"><InputNumber min={0} precision={2} step={0.01} addonAfter="元" style={{ width: '100%' }} /></Form.Item></Col>
                       <Col xs={24} sm={16}><Form.Item label="用户中心名称" name="siteTitle"><Input placeholder="X用户中心" /></Form.Item></Col>
                     </Row>
-                    <Form.Item label="套餐显示信息（可选）" name="plans" extra="例如 [1,3,6]，实际扣款仍按每月价格计算"><Input placeholder="[1,3,6]" /></Form.Item>
+                    <Form.Item label="续期月数选项（可选）" name="plans" extra="例如 [1,3,6]；价格按通用月价 × 月数计算。创建客户账号时绑定后台已有客户端邮箱，门户会显示该客户端对应的节点和订阅链接。"><Input placeholder="[1,3,6]" /></Form.Item>
                     <Form.Item label="卡密购买跳转链接" name="purchaseUrl" extra="这是用户点击购买卡密时跳转的链接，与三方接口地址独立"><Input prefix={<LinkOutlined />} placeholder="https://shop.example.com/codes" /></Form.Item>
                     <Divider>三方卡密系统接口预留</Divider>
                     <Alert type="info" showIcon message="这里只保存接口配置，具体协议由你的卡密系统适配。密钥留空表示保持原值。" style={{ marginBottom: 16 }} />
@@ -282,19 +299,21 @@ export default function PortalManagementPage() {
                   <Statistic title="卡密记录" value={coupons.length} prefix={<WalletOutlined />} />
                   <Divider />
                   <Typography.Text type="secondary">门户地址：/portal</Typography.Text>
+                  <Button className="portal-open-link" type="primary" icon={<LinkOutlined />} href={`${window.X_UI_BASE_PATH || ''}portal`} target="_blank" rel="noreferrer">打开用户端</Button>
                 </Card>
               </Col>
             </Row>
 
             <Card title="客户账号" className="portal-management-card" extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => setCustomerModalOpen(true)}>创建客户</Button>}>
+              <Alert type="info" showIcon message="绑定关系" description="每个门户账号绑定一个后台客户端邮箱；该客户端所属的节点和订阅链接会显示给对应用户。月费是所有绑定客户端共用的通用价格。" style={{ marginBottom: 16 }} />
               <Table rowKey="username" size={isMobile ? 'small' : 'middle'} loading={loading} columns={customerColumns} dataSource={customers} scroll={{ x: 680 }} pagination={{ pageSize: 8 }} />
             </Card>
 
             <Row gutter={[16, 16]}>
               <Col xs={24} xl={9}>
                 <Card title="生成余额卡密" className="portal-management-card">
-                  <Form form={couponForm} layout="vertical" initialValues={{ count: 10, amountCents: 2000 }} onFinish={(v) => void generateCoupons(v)}>
-                    <Row gutter={12}><Col span={12}><Form.Item label="数量" name="count" rules={[{ required: true }]}><InputNumber min={1} max={1000} style={{ width: '100%' }} /></Form.Item></Col><Col span={12}><Form.Item label="金额（分）" name="amountCents" rules={[{ required: true }]}><InputNumber min={1} style={{ width: '100%' }} /></Form.Item></Col></Row>
+                  <Form form={couponForm} layout="vertical" initialValues={{ count: 10, amountYuan: 20 }} onFinish={(v) => void generateCoupons(v)}>
+                    <Row gutter={12}><Col span={12}><Form.Item label="数量" name="count" rules={[{ required: true }]}><InputNumber min={1} max={1000} style={{ width: '100%' }} /></Form.Item></Col><Col span={12}><Form.Item label="金额（元）" name="amountYuan" rules={[{ required: true }]}><InputNumber min={0.01} precision={2} step={0.01} addonAfter="元" style={{ width: '100%' }} /></Form.Item></Col></Row>
                     <Form.Item label="前缀" name="prefix"><Input placeholder="VIP-" /></Form.Item>
                     <Form.Item label="批次号" name="batchNo"><Input placeholder="例如 2026-09" /></Form.Item>
                     <Button type="primary" htmlType="submit" block>生成卡密</Button>
@@ -313,7 +332,7 @@ export default function PortalManagementPage() {
         <Form form={customerForm} layout="vertical" onFinish={(v) => void createCustomer(v)}>
           <Form.Item label="登录用户名" name="username" rules={[{ required: true, message: '请输入用户名' }]}><Input /></Form.Item>
           <Form.Item label="登录密码" name="password" rules={[{ required: true, message: '请输入密码' }]}><Input.Password /></Form.Item>
-          <Form.Item label="绑定客户端邮箱" name="email" rules={[{ required: true, message: '请输入已存在的客户端邮箱' }]}><Input placeholder="必须是后台已有客户端邮箱" /></Form.Item>
+          <Form.Item label="绑定客户端邮箱（决定用户的节点和链接）" name="email" rules={[{ required: true, message: '请输入已存在的客户端邮箱' }]}><Input placeholder="必须是后台已有客户端邮箱" /></Form.Item>
         </Form>
       </Modal>
     </ConfigProvider>
