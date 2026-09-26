@@ -3434,7 +3434,7 @@ customer_portal_menu() {
         read -rp "请输入选项 [0-4]: " portal_choice
         case "$portal_choice" in
             1)
-                local settings host port scheme base response ip_result proxy_domain proxy_scheme
+                local settings host portal_port portal_enabled portal_public_url scheme response proxy_domain proxy_scheme
                 settings=$(${xui_folder}/x-ui setting -show true 2>/dev/null)
                 host=""
                 for ip_address in "https://api4.ipify.org" "https://ipv4.icanhazip.com" "https://4.ident.me"; do
@@ -3442,19 +3442,28 @@ customer_portal_menu() {
                     if [[ "$response" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then host="$response"; break; fi
                 done
                 host="${host:-$(hostname -f 2>/dev/null || hostname)}"
-                port=$(echo "$settings" | awk -F': ' '/^port:/{print $2}' | tr -d '[:space:]')
+                portal_port=$(echo "$settings" | awk -F': ' '/^portalPort:/{print $2}' | tr -d '[:space:]')
+                portal_enabled=$(echo "$settings" | awk -F': ' '/^portalEnabled:/{print $2}' | tr -d '[:space:]')
+                portal_public_url=$(echo "$settings" | sed -n 's/^portalPublicUrl:[[:space:]]*//p' | head -n 1)
+                portal_port="${portal_port:-2054}"
                 scheme="http"
                 echo "$settings" | grep -qE '^(certFile|keyFile): .+' && scheme="https"
-                base=$(echo "$settings" | awk -F': ' '/^webBasePath:/{print $2}' | tr -d '[:space:]' | sed 's#/$##')
-                echo -e "${green}客户门户地址：${plain} ${scheme}://${host}:${port}${base}/portal"
+                if [[ "$portal_enabled" == "false" ]]; then
+                    echo -e "${yellow}客户门户当前已停用。请先在后台的“客户门户管理 → 门户与访问”中启用。${plain}"
+                fi
+                if [[ -n "$portal_public_url" ]]; then
+                    echo -e "${green}客户门户公开地址：${plain} ${portal_public_url}"
+                fi
+                echo -e "${green}客户门户独立地址：${plain} ${scheme}://${host}:${portal_port}/portal"
+                echo -e "${blue}用户端口：${plain}${portal_port}（不再使用后台端口和后台路径）"
                 if [[ -f /etc/nginx/conf.d/3x-ui-customer-portal.conf ]]; then
                     proxy_domain=$(awk '/^[[:space:]]*server_name /{print $2; exit}' /etc/nginx/conf.d/3x-ui-customer-portal.conf | tr -d ';')
                     proxy_scheme="http"
                     grep -qE '^[[:space:]]*listen 443' /etc/nginx/conf.d/3x-ui-customer-portal.conf && proxy_scheme="https"
-                    [[ -n "$proxy_domain" ]] && echo -e "${green}独立客户域名入口：${plain} ${proxy_scheme}://${proxy_domain}${base}/portal"
-                fi
-                if echo "$settings" | grep -qE '^listenIP: 127\.0\.0\.1'; then
-                    echo -e "${yellow}当前面板绑定在 127.0.0.1。使用公网地址前，请配置反向代理或修改 listenIP。${plain}"
+                    [[ -n "$proxy_domain" ]] && echo -e "${green}独立客户域名入口：${plain} ${proxy_scheme}://${proxy_domain}/portal"
+                    if ! grep -qE "proxy_pass[[:space:]]+https?://[^;]+:${portal_port}([/;]|$)" /etc/nginx/conf.d/3x-ui-customer-portal.conf; then
+                        echo -e "${yellow}检测到旧版反向代理仍指向后台端口，请运行第 3 项重新生成。${plain}"
+                    fi
                 fi
                 ;;
             2)
@@ -3462,7 +3471,7 @@ customer_portal_menu() {
                 echo -e "  GET/POST /panel/api/portal/billing"
                 echo -e "卡密接口字段：cardProviderUrl、cardProviderSecret、cardProviderSign"
                 echo -e "购买跳转链接单独使用 purchaseUrl，与卡密接口无关。"
-                echo -e "客户域名请使用本菜单的第 3 项生成 Nginx 配置。若要真正隐藏后台端口，请使用第 4 项启用安全模式。"
+                echo -e "客户域名请使用本菜单的第 3 项反向代理到独立用户端口。若要隐藏后台公网端口，请使用第 4 项启用安全模式。"
                 ;;
             3)
                 customer_portal_proxy_menu
@@ -3518,9 +3527,8 @@ customer_portal_secure_mode() {
     esac
 }
 
-# Generate a portal-only reverse proxy. Nginx exposes only /portal, its API and
-# the assets needed by portal.html; panel routes are returned as 404 on this
-# host. Use customer_portal_secure_mode afterwards to hide the panel port.
+# Generate a portal-only reverse proxy to the independent portal listener.
+# Panel routes are never registered on that listener and return 404.
 customer_portal_proxy_menu() {
     if ! command -v nginx > /dev/null 2>&1; then
         echo -e "${yellow}未检测到 Nginx。请先安装 Nginx，再运行此菜单。${plain}"
@@ -3529,20 +3537,28 @@ customer_portal_proxy_menu() {
         return 0
     fi
 
-    local settings panel_port base_path portal_domain conf_path cert_file key_file custom_cert custom_key temp_conf backend_scheme backend_url cert_config key_config
+    local settings portal_port portal_listen portal_enabled portal_domain conf_path cert_file key_file custom_cert custom_key temp_conf backend_scheme backend_host backend_url cert_config key_config public_scheme public_url
     settings=$(${xui_folder}/x-ui setting -show true 2>/dev/null)
-    panel_port=$(echo "$settings" | awk -F': ' '/^port:/{print $2}' | tr -d '[:space:]')
-    base_path=$(echo "$settings" | awk -F': ' '/^webBasePath:/{print $2}' | tr -d '[:space:]')
+    portal_port=$(echo "$settings" | awk -F': ' '/^portalPort:/{print $2}' | tr -d '[:space:]')
+    portal_listen=$(echo "$settings" | awk -F': ' '/^portalListen:/{print $2}' | tr -d '[:space:]')
+    portal_enabled=$(echo "$settings" | awk -F': ' '/^portalEnabled:/{print $2}' | tr -d '[:space:]')
     cert_config=$(echo "$settings" | awk -F': ' '/^certFile:/{print $2}' | tr -d '[:space:]')
     key_config=$(echo "$settings" | awk -F': ' '/^keyFile:/{print $2}' | tr -d '[:space:]')
-    panel_port="${panel_port:-2053}"
+    portal_port="${portal_port:-2054}"
+    portal_listen="${portal_listen:-0.0.0.0}"
+    if [[ "$portal_enabled" == "false" ]]; then
+        echo -e "${red}客户门户当前已停用，请先在后台启用后再配置域名。${plain}"
+        return 1
+    fi
     backend_scheme="http"
     [[ -n "$cert_config" && -n "$key_config" ]] && backend_scheme="https"
-    backend_url="${backend_scheme}://127.0.0.1:${panel_port}"
-    base_path="${base_path:-/}"
-    [[ "$base_path" != /* ]] && base_path="/${base_path}"
-    base_path="${base_path%/}"
-    [[ "$base_path" == "/" ]] && base_path=""
+    case "$portal_listen" in
+        "" | "0.0.0.0" | "127.0.0.1") backend_host="127.0.0.1" ;;
+        "::" | "::1") backend_host="[::1]" ;;
+        *:*) backend_host="[${portal_listen}]" ;;
+        *) backend_host="$portal_listen" ;;
+    esac
+    backend_url="${backend_scheme}://${backend_host}:${portal_port}"
 
     read -rp "请输入客户门户域名（例如 user.example.com）：" portal_domain
     if ! is_domain "$portal_domain"; then
@@ -3559,9 +3575,10 @@ customer_portal_proxy_menu() {
 
     conf_path="/etc/nginx/conf.d/3x-ui-customer-portal.conf"
     temp_conf=$(mktemp)
-    if [[ "$base_path" == "" && -f "$cert_file" && -f "$key_file" ]]; then
+    if [[ -f "$cert_file" && -f "$key_file" ]]; then
+        public_scheme="https"
         cat > "$temp_conf" <<EOF
-# Generated by x-ui customer portal menu. Enable portal security mode to hide the panel port.
+# Generated by x-ui customer portal menu. Proxies only to the independent portal listener.
 server {
     listen 80;
     server_name ${portal_domain};
@@ -3576,69 +3593,21 @@ server {
     location = /portal { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
     location ^~ /portal/ { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
     location ^~ /assets/ { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location = /manifest.webmanifest { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location = /pwa-register.js { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location = /service-worker.js { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location ^~ /icons/ { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location / { return 404; }
-}
-EOF
-    elif [[ "$base_path" == "" ]]; then
-        cat > "$temp_conf" <<EOF
-# Generated by x-ui customer portal menu. Enable portal security mode to hide the panel port.
-server {
-    listen 80;
-    server_name ${portal_domain};
-    location = / { return 302 /portal; }
-    location = /portal { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location ^~ /portal/ { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location ^~ /assets/ { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location = /manifest.webmanifest { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location = /pwa-register.js { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location = /service-worker.js { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location ^~ /icons/ { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location / { return 404; }
-}
-EOF
-    elif [[ -f "$cert_file" && -f "$key_file" ]]; then
-        cat > "$temp_conf" <<EOF
-# Generated by x-ui customer portal menu. Enable portal security mode to hide the panel port.
-server {
-    listen 80;
-    server_name ${portal_domain};
-    location / { return 301 https://\$host\$request_uri; }
-}
-server {
-    listen 443 ssl http2;
-    server_name ${portal_domain};
-    ssl_certificate ${cert_file};
-    ssl_certificate_key ${key_file};
-    location = ${base_path} { return 302 ${base_path}/portal; }
-    location = ${base_path}/portal { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location ^~ ${base_path}/portal/ { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location ^~ ${base_path}/assets/ { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location = ${base_path}/manifest.webmanifest { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location = ${base_path}/pwa-register.js { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location = ${base_path}/service-worker.js { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location ^~ ${base_path}/icons/ { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
     location / { return 404; }
 }
 EOF
     else
+        public_scheme="http"
         echo -e "${yellow}证书文件不存在，先生成 HTTP 配置。申请证书后重新运行此项即可启用 HTTPS。${plain}"
         cat > "$temp_conf" <<EOF
-# Generated by x-ui customer portal menu. Enable portal security mode to hide the panel port.
+# Generated by x-ui customer portal menu. Proxies only to the independent portal listener.
 server {
     listen 80;
     server_name ${portal_domain};
-    location = ${base_path} { return 302 ${base_path}/portal; }
-    location = ${base_path}/portal { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location ^~ ${base_path}/portal/ { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location ^~ ${base_path}/assets/ { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location = ${base_path}/manifest.webmanifest { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location = ${base_path}/pwa-register.js { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location = ${base_path}/service-worker.js { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location ^~ ${base_path}/icons/ { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
+    location = / { return 302 /portal; }
+    location = /portal { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
+    location ^~ /portal/ { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
+    location ^~ /assets/ { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
     location / { return 404; }
 }
 EOF
@@ -3653,9 +3622,9 @@ proxy_set_header Host $http_host;
 proxy_set_header X-Real-IP $remote_addr;
 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_read_timeout 3600s;
+proxy_read_timeout 3600s;
 proxy_send_timeout 3600s;
-    proxy_buffering off;
+proxy_buffering off;
 EOF
     if [[ "$backend_scheme" == "https" ]]; then
         echo 'proxy_ssl_verify off;' >> /etc/nginx/snippets/3x-ui-portal-proxy.conf
@@ -3667,13 +3636,16 @@ EOF
     rm -f "$temp_conf"
     if nginx -t; then
         systemctl reload nginx > /dev/null 2>&1 || nginx -s reload
-        echo -e "${green}客户门户反向代理已写入：${plain}${conf_path}"
-        if [[ "$base_path" == "" ]]; then
-            echo -e "${green}客户地址：${plain} https://${portal_domain}/portal"
+        public_url="${public_scheme}://${portal_domain}/portal"
+        if ! ${xui_folder}/x-ui setting -portalPublicUrl "$public_url" > /dev/null 2>&1; then
+            echo -e "${yellow}Nginx 已生效，但门户公开地址写入数据库失败，请在后台手动填写：${public_url}${plain}"
         else
-            echo -e "${green}客户地址：${plain} https://${portal_domain}${base_path}/portal"
+            restart
         fi
-        echo -e "${yellow}后台原有地址、端口和监听设置均未修改。${plain}"
+        echo -e "${green}客户门户反向代理已写入：${plain}${conf_path}"
+        echo -e "${green}客户地址：${plain} ${public_url}"
+        echo -e "${blue}反向代理目标：${plain} ${backend_url}（独立用户端口）"
+        echo -e "${yellow}后台地址、后台端口和后台路径均未暴露给该域名。${plain}"
     else
         echo -e "${red}nginx -t 校验失败，已保留配置文件但未 reload。${plain}"
         return 1

@@ -256,6 +256,10 @@ func showSetting(show bool) {
 		if err != nil {
 			fmt.Println("get key file failed, error info:", err)
 		}
+		portalEnabled, portalEnabledErr := settingService.GetPortalEnabled()
+		portalListen, portalListenErr := settingService.GetPortalListen()
+		portalPort, portalPortErr := settingService.GetPortalPort()
+		portalPublicURL, portalPublicURLErr := settingService.GetPortalPublicURL()
 
 		userService := panel.UserService{}
 		userModel, err := userService.GetFirstUser()
@@ -281,7 +285,44 @@ func showSetting(show bool) {
 		fmt.Println("hasDefaultCredential:", hasDefaultCredential)
 		fmt.Println("port:", port)
 		fmt.Println("webBasePath:", webBasePath)
+		fmt.Println("certFile:", certFile)
+		fmt.Println("keyFile:", keyFile)
+		if portalEnabledErr == nil {
+			fmt.Println("portalEnabled:", portalEnabled)
+		}
+		if portalListenErr == nil {
+			fmt.Println("portalListen:", portalListen)
+		}
+		if portalPortErr == nil {
+			fmt.Println("portalPort:", portalPort)
+		}
+		if portalPublicURLErr == nil {
+			fmt.Println("portalPublicUrl:", portalPublicURL)
+		}
 	}
+}
+
+func updatePortalSetting(port int, listenIP string, publicURL string) error {
+	settingService := service.SettingService{}
+	if port > 0 {
+		if err := settingService.SetPortalPort(port); err != nil {
+			return err
+		}
+		fmt.Printf("Customer portal port set successfully: %v\n", port)
+	}
+	if listenIP != "" {
+		if err := settingService.SetPortalListen(listenIP); err != nil {
+			return err
+		}
+		fmt.Printf("Customer portal listen address set successfully: %s\n", listenIP)
+	}
+	if publicURL != "" {
+		if err := settingService.SetPortalPublicURL(publicURL); err != nil {
+			return err
+		}
+		fmt.Printf("Customer portal public URL set successfully: %s\n", publicURL)
+	}
+	return nil
 }
 
 // updateTgbotEnableSts enables or disables the Telegram bot notifications based on the status parameter.
@@ -609,6 +650,9 @@ func main() {
 	var password string
 	var webBasePath string
 	var listenIP string
+	var portalListenIP string
+	var portalPublicURL string
+	var portalPort int
 	var getListen bool
 	var webCertFile string
 	var webKeyFile string
@@ -629,6 +673,9 @@ func main() {
 	settingCmd.StringVar(&password, "password", "", "Set login password")
 	settingCmd.StringVar(&webBasePath, "webBasePath", "", "Set base path for Panel")
 	settingCmd.StringVar(&listenIP, "listenIP", "", "set panel listenIP IP")
+	settingCmd.StringVar(&portalListenIP, "portalListenIP", "", "Set customer portal listen IP")
+	settingCmd.IntVar(&portalPort, "portalPort", 0, "Set customer portal port number")
+	settingCmd.StringVar(&portalPublicURL, "portalPublicUrl", "", "Set customer portal public URL")
 	settingCmd.BoolVar(&resetTwoFactor, "resetTwoFactor", false, "Reset two-factor authentication settings")
 	settingCmd.BoolVar(&getListen, "getListen", false, "Display current panel listenIP IP")
 	settingCmd.BoolVar(&getCert, "getCert", false, "Display current certificate settings")
@@ -716,6 +763,10 @@ func main() {
 			}
 		} else {
 			if err = updateSetting(port, username, password, webBasePath, listenIP, resetTwoFactor); err != nil {
+				return
+			}
+			if err = updatePortalSetting(portalPort, portalListenIP, portalPublicURL); err != nil {
+				fmt.Println("Failed to update customer portal settings:", err)
 				return
 			}
 		}

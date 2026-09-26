@@ -165,7 +165,8 @@ write_install_result() {
         printf 'XUI_PANEL_PORT=%q\n' "$port"
         printf 'XUI_WEB_BASE_PATH=%q\n' "$wbp"
         printf 'XUI_ACCESS_URL=%q\n' "${scheme}://${url_host}:${port}/${wbp}"
-        printf 'XUI_PORTAL_URL=%q\n' "${scheme}://${url_host}:${port}/${wbp}/portal"
+        printf 'XUI_PORTAL_PORT=%q\n' "2054"
+        printf 'XUI_PORTAL_URL=%q\n' "${scheme}://${url_host}:2054/portal"
         printf 'XUI_API_TOKEN=%q\n' "$token"
         printf 'XUI_DB_TYPE=%q\n' "$dbtype"
     } > "$result_file"; then

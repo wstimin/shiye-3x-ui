@@ -309,6 +309,12 @@ func (s *Server) initPortalRouter(secureCookie bool) (*gin.Engine, error) {
 	if sessionMaxAge, maxAgeErr := s.settingService.GetSessionMaxAge(); maxAgeErr == nil && sessionMaxAge > 0 {
 		portalSessionOptions.MaxAge = sessionMaxAge * 60
 	}
+	// serveDistPage mints the CSRF token embedded in the HTML shell through
+	// gin-contrib/sessions. The portal keeps this cookie separate from both the
+	// panel session and the authenticated customer session below.
+	portalCSRFStore := cookie.NewStore(secret)
+	portalCSRFStore.Options(portalSessionOptions)
+	engine.Use(sessions.Sessions("customer-portal-csrf", portalCSRFStore))
 	controller.SetPortalSessionStore(secret, portalSessionOptions)
 	if config.IsDebug() {
 		engine.StaticFS("/assets", http.FS(os.DirFS("internal/web/dist/assets")))
