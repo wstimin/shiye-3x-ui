@@ -254,8 +254,8 @@ export default function PortalManagementPage() {
               <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>刷新</Button>
             </div>
 
-            <Row gutter={[16, 16]}>
-              <Col xs={24} xl={15}>
+            <Row gutter={[16, 16]} align="top" className="portal-management-top-row">
+              <Col xs={24} xl={16}>
                 <Card title={<Space><SettingOutlined />门户计费与品牌</Space>} className="portal-management-card">
                   <Form form={billingForm} layout="vertical" initialValues={billing} onFinish={(v) => void saveBilling(v)}>
                     <Row gutter={16}>
@@ -275,7 +275,7 @@ export default function PortalManagementPage() {
                   </Form>
                 </Card>
               </Col>
-              <Col xs={24} xl={9}>
+              <Col xs={24} xl={8}>
                 <Card className="portal-management-card portal-management-summary">
                   <Statistic title="客户账号" value={customers.length} prefix={<SafetyCertificateOutlined />} />
                   <Divider />
