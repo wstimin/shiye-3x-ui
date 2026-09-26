@@ -22,6 +22,7 @@ export interface HttpOptions {
   params?: unknown;
   timeout?: number;
   signal?: AbortSignal;
+  redirectOnUnauthorized?: boolean;
   silent?: boolean;
   silentSuccess?: boolean;
 }

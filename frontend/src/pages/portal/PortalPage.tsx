@@ -78,7 +78,13 @@ interface RenewState {
 }
 
 async function fetchMe(silent = true): Promise<PortalMe | null> {
-  const msg = await HttpUtil.get<PortalMe>('/portal/api/auth/me', undefined, { silent });
+  // An unauthenticated visitor belongs on the portal login screen. The shared
+  // panel transport normally redirects every 401 to the application root;
+  // here that root redirects back to /portal and would create a reload loop.
+  const msg = await HttpUtil.get<PortalMe>('/portal/api/auth/me', undefined, {
+    silent,
+    redirectOnUnauthorized: false,
+  });
   if (msg.success && msg.obj) {
     const obj = msg.obj as unknown as PortalMe;
     if (obj.username) return obj;

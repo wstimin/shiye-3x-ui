@@ -151,7 +151,10 @@ update() {
     bash <(curl -Ls https://raw.githubusercontent.com/wstimin/shiye-3x-ui/main/update.sh)
     if [[ $? == 0 ]]; then
         LOGI "Update is complete, Panel has automatically restarted "
-        before_show_menu
+        if [[ $# == 0 ]]; then
+            echo -e "${green}正在重新载入新版交互菜单...${plain}"
+            exec /usr/bin/x-ui
+        fi
     fi
 }
 
@@ -169,7 +172,10 @@ update_dev() {
     XUI_UPDATE_TAG="dev-latest" bash <(curl -Ls https://raw.githubusercontent.com/wstimin/shiye-3x-ui/main/update.sh)
     if [[ $? == 0 ]]; then
         LOGI "Dev update is complete, Panel has automatically restarted "
-        before_show_menu
+        if [[ $# == 0 ]]; then
+            echo -e "${green}正在重新载入新版交互菜单...${plain}"
+            exec /usr/bin/x-ui
+        fi
     fi
 }
 

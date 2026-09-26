@@ -30,6 +30,7 @@ export interface HttpRequestOptions {
   params?: unknown;
   timeout?: number;
   signal?: AbortSignal;
+  redirectOnUnauthorized?: boolean;
 }
 
 function readMetaToken(): string | null {
@@ -183,7 +184,7 @@ export async function httpRequest(
     }
   }
 
-  if (res.status === 401) {
+  if (res.status === 401 && options.redirectOnUnauthorized !== false) {
     if (!sessionExpired) {
       sessionExpired = true;
       window.location.replace(window.X_UI_BASE_PATH || basePathPrefix || '/');
