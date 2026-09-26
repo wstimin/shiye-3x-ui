@@ -1606,26 +1606,26 @@ export const sections: readonly Section[] = [
         method: 'GET',
         path: '/panel/api/portal/customers',
         summary:
-          'List portal logins newest first. Responses carry username, email, balance and enable flag — never password hashes.',
+          'List portal logins newest first. Responses carry username, bound client email, balance, per-customer monthly price and enable flag — never password hashes.',
         response:
-          '{\n  "success": true,\n  "obj": [\n    { "username": "alice", "email": "alice@example.com", "balanceCents": 500, "enable": true }\n  ]\n}',
+          '{\n  "success": true,\n  "obj": [\n    { "username": "alice", "email": "alice@example.com", "balanceCents": 500, "monthlyPriceCents": 2000, "enable": true }\n  ]\n}',
       },
       {
         method: 'POST',
         path: '/panel/api/portal/customers',
         summary:
-          'Bind a portal login to an existing client email. The email must already exist as a client; the username must be unique.',
-        body: '{\n  "username": "alice",\n  "password": "s3cret",\n  "email": "alice@example.com"\n}',
+          'Bind a portal login and its own monthly price to an existing unbound client email. The username must be unique.',
+        body: '{\n  "username": "alice",\n  "password": "s3cret",\n  "email": "alice@example.com",\n  "monthlyPriceCents": 2000\n}',
         response:
-          '{\n  "success": true,\n  "obj": { "username": "alice", "email": "alice@example.com", "enable": true }\n}',
+          '{\n  "success": true,\n  "obj": { "username": "alice", "email": "alice@example.com", "monthlyPriceCents": 2000, "enable": true }\n}',
       },
       {
         method: 'POST',
         path: '/panel/api/portal/customers/:username',
         summary:
-          'Update a portal login: rotate its password and/or flip the enable switch. A password change bumps the login epoch so live portal sessions drop.',
+          'Update the bound client, per-customer monthly price, password and/or enable switch. A password change bumps the login epoch so live portal sessions drop.',
         params: [{ name: 'username', in: 'path', type: 'string', desc: 'Portal username.' }],
-        body: '{\n  "password": "new-secret",\n  "enable": true\n}',
+        body: '{\n  "email": "alice@example.com",\n  "monthlyPriceCents": 2500,\n  "password": "new-secret",\n  "enable": true\n}',
       },
       {
         method: 'POST',
@@ -1660,16 +1660,16 @@ export const sections: readonly Section[] = [
         method: 'GET',
         path: '/panel/api/portal/billing',
         summary:
-          'Read the portal billing settings: monthly price in cents, optional plan metadata, the separate purchase URL and site title.',
+          'Read independent portal listener, public address, legacy default pricing, renewal options, purchase URL and branding settings.',
         response:
-          '{\n  "success": true,\n  "obj": {\n    "pricePerMonthCents": 2000,\n    "plans": "[1,3,6]",\n    "purchaseUrl": "https://shop.example.com/codes",\n    "siteTitle": "X用户中心"\n  }\n}',
+          '{\n  "success": true,\n  "obj": {\n    "portalEnabled": true,\n    "portalListen": "0.0.0.0",\n    "portalPort": 2054,\n    "portalPublicUrl": "https://user.example.com/portal",\n    "pricePerMonthCents": 2000,\n    "plans": "[1,3,6]",\n    "purchaseUrl": "https://shop.example.com/codes",\n    "siteTitle": "X用户中心"\n  }\n}',
       },
       {
         method: 'POST',
         path: '/panel/api/portal/billing',
         summary:
-          'Persist monthly billing, branding, the separate purchase URL and optional third-party card-system interface fields. The purchase URL must be http(s); an empty value clears it. Card-system credentials are only used by the server-side adapter and are never returned by the public portal API.',
-        body: '{\n  "pricePerMonthCents": 2000,\n  "plans": "[1,3,6]",\n  "purchaseUrl": "https://shop.example.com/codes",\n  "siteTitle": "X用户中心",\n  "cardProviderUrl": "https://cards.example.com/api",\n  "cardProviderSecret": "server-secret",\n  "cardProviderSign": "sign-key"\n}',
+          'Persist the isolated portal listener, public address, legacy default monthly price, branding, the separate purchase URL and optional third-party card-system fields. Listener changes schedule a panel restart. Secrets are write-only.',
+        body: '{\n  "portalEnabled": true,\n  "portalListen": "0.0.0.0",\n  "portalPort": 2054,\n  "portalPublicUrl": "https://user.example.com/portal",\n  "pricePerMonthCents": 2000,\n  "plans": "[1,3,6]",\n  "purchaseUrl": "https://shop.example.com/codes",\n  "siteTitle": "X用户中心",\n  "cardProviderUrl": "https://cards.example.com/api",\n  "cardProviderSecret": "server-secret",\n  "cardProviderSign": "sign-key"\n}',
       },
     ],
   },

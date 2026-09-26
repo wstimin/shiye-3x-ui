@@ -180,7 +180,8 @@ export default function PortalPage() {
   }, [redeemCode, messageApi, t, refresh]);
 
   const selectedMonths = renew.customMonths ?? renew.months;
-  const selectedCost = plans ? planCostCents(selectedMonths, plans.pricePerMonthCents) : 0;
+  const monthlyPrice = me?.pricePerMonthCents ?? plans?.pricePerMonthCents ?? 0;
+  const selectedCost = planCostCents(selectedMonths, monthlyPrice);
 
   const onRenew = useCallback(async () => {
     setRenewing(true);

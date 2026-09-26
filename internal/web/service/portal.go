@@ -3,6 +3,7 @@ package service
 import (
 	"crypto/subtle"
 	"errors"
+	"net"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +28,10 @@ const (
 	PortalCardProviderURLKey    = "portal.cardProviderUrl"
 	PortalCardProviderSecretKey = "portal.cardProviderSecret"
 	PortalCardProviderSignKey   = "portal.cardProviderSign"
+	PortalEnabledKey            = "portal.enabled"
+	PortalListenKey             = "portal.listen"
+	PortalPortKey               = "portal.port"
+	PortalPublicURLKey          = "portal.publicUrl"
 	PortalDefaultSiteTitle      = "X用户中心"
 
 	CouponStatusUnused   = "unused"
@@ -49,7 +54,7 @@ const maxPortalUsername = 64
 var portalRenewMu sync.Mutex
 
 // CreateCustomer creates a portal login bound to an existing client email.
-func (s *ClientService) CreateCustomer(username, password, email string) (*model.CustomerAccount, error) {
+func (s *ClientService) CreateCustomer(username, password, email string, monthlyPriceCents int64) (*model.CustomerAccount, error) {
 	username = strings.TrimSpace(username)
 	if username == "" || len(username) > maxPortalUsername {
 		return nil, common.NewError("portal username is required (max 64 chars)")
@@ -61,19 +66,62 @@ func (s *ClientService) CreateCustomer(username, password, email string) (*model
 	if email == "" {
 		return nil, common.NewError("client email is required")
 	}
+	if monthlyPriceCents <= 0 {
+		return nil, common.NewError("monthly price must be positive")
+	}
 	db := database.GetDB()
 	if _, err := s.GetRecordByEmail(db, email); err != nil {
 		return nil, err
+	}
+	var bound int64
+	if err := db.Model(&model.CustomerAccount{}).
+		Where("LOWER(email) = LOWER(?)", email).Count(&bound).Error; err != nil {
+		return nil, err
+	}
+	if bound > 0 {
+		return nil, common.NewError("client is already bound to a portal account")
 	}
 	hash, err := crypto.HashPasswordAsBcrypt(password)
 	if err != nil {
 		return nil, err
 	}
-	acc := &model.CustomerAccount{Username: username, PasswordHash: hash, Email: email, Enable: true}
+	acc := &model.CustomerAccount{
+		Username: username, PasswordHash: hash, Email: email,
+		MonthlyPriceCents: monthlyPriceCents, Enable: true,
+	}
 	if err := db.Create(acc).Error; err != nil {
 		return nil, err
 	}
 	return acc, nil
+}
+
+func (s *ClientService) UpdateCustomerProfile(username, email string, monthlyPriceCents int64) error {
+	username = strings.TrimSpace(username)
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return common.NewError("client email is required")
+	}
+	if monthlyPriceCents <= 0 {
+		return common.NewError("monthly price must be positive")
+	}
+	db := database.GetDB()
+	if _, err := s.GetRecordByEmail(db, email); err != nil {
+		return err
+	}
+	var bound int64
+	if err := db.Model(&model.CustomerAccount{}).
+		Where("LOWER(email) = LOWER(?) AND username <> ?", email, username).
+		Count(&bound).Error; err != nil {
+		return err
+	}
+	if bound > 0 {
+		return common.NewError("client is already bound to a portal account")
+	}
+	return db.Model(&model.CustomerAccount{}).Where("username = ?", username).
+		Updates(map[string]any{
+			"email": email, "monthly_price_cents": monthlyPriceCents,
+			"updated_at": time.Now().UnixMilli(),
+		}).Error
 }
 
 // CheckCustomer verifies portal credentials, returning the account row.
@@ -259,9 +307,13 @@ func (s *ClientService) RenewCustomer(inboundSvc *InboundService, username strin
 	if !acc.Enable {
 		return 0, acc.BalanceCents, common.NewError("account is disabled")
 	}
-	price, err := (&SettingService{}).GetPortalPricePerMonthCents()
-	if err != nil {
-		return 0, acc.BalanceCents, err
+	price := acc.MonthlyPriceCents
+	if price <= 0 {
+		var err error
+		price, err = (&SettingService{}).GetPortalPricePerMonthCents()
+		if err != nil {
+			return 0, acc.BalanceCents, err
+		}
 	}
 	cost := int64(months) * price
 	if cost <= 0 {
@@ -432,4 +484,54 @@ func (s *SettingService) GetPortalCardProviderSign() (string, error) {
 
 func (s *SettingService) SetPortalCardProviderSign(v string) error {
 	return s.setString(PortalCardProviderSignKey, strings.TrimSpace(v))
+}
+
+func (s *SettingService) GetPortalEnabled() (bool, error) {
+	return s.getBool(PortalEnabledKey)
+}
+
+func (s *SettingService) SetPortalEnabled(enabled bool) error {
+	return s.setBool(PortalEnabledKey, enabled)
+}
+
+func (s *SettingService) GetPortalListen() (string, error) {
+	return s.getString(PortalListenKey)
+}
+
+func (s *SettingService) SetPortalListen(listen string) error {
+	listen = strings.TrimSpace(listen)
+	if listen != "" && net.ParseIP(listen) == nil {
+		return common.NewError("portal listen address must be an IP address")
+	}
+	return s.setString(PortalListenKey, listen)
+}
+
+func (s *SettingService) GetPortalPort() (int, error) {
+	return s.getInt(PortalPortKey)
+}
+
+func (s *SettingService) SetPortalPort(port int) error {
+	if port < 1 || port > 65535 {
+		return common.NewError("portal port must be between 1 and 65535")
+	}
+	panelPort, err := s.GetPort()
+	if err != nil {
+		return err
+	}
+	if port == panelPort {
+		return common.NewError("portal port must differ from panel port")
+	}
+	return s.setInt(PortalPortKey, port)
+}
+
+func (s *SettingService) GetPortalPublicURL() (string, error) {
+	return s.getString(PortalPublicURLKey)
+}
+
+func (s *SettingService) SetPortalPublicURL(raw string) error {
+	clean, err := SanitizeHTTPURL(raw)
+	if err != nil {
+		return err
+	}
+	return s.setString(PortalPublicURLKey, strings.TrimRight(clean, "/"))
 }

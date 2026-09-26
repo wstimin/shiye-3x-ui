@@ -43,15 +43,15 @@ func TestCreateAndCheckCustomer(t *testing.T) {
 	svc, inboundSvc := ClientService{}, InboundService{}
 	seedPortalClient(t, &svc, &inboundSvc, "c1@example.com", 1800000000000)
 
-	if _, err := svc.CreateCustomer("alice", "s3cret-pw", "c1@example.com"); err != nil {
+	if _, err := svc.CreateCustomer("alice", "s3cret-pw", "c1@example.com", 100); err != nil {
 		t.Fatalf("CreateCustomer: %v", err)
 	}
 	// Duplicate username must fail.
-	if _, err := svc.CreateCustomer("alice", "other", "c1@example.com"); err == nil {
+	if _, err := svc.CreateCustomer("alice", "other", "c1@example.com", 100); err == nil {
 		t.Fatal("duplicate username accepted")
 	}
 	// Unknown client email must fail.
-	if _, err := svc.CreateCustomer("bob", "pw", "ghost@example.com"); err == nil {
+	if _, err := svc.CreateCustomer("bob", "pw", "ghost@example.com", 100); err == nil {
 		t.Fatal("unknown email accepted")
 	}
 	acc, err := svc.CheckCustomer("alice", "s3cret-pw")
@@ -77,7 +77,7 @@ func TestRedeemCoupon(t *testing.T) {
 	setupPortalDB(t)
 	svc, inboundSvc := ClientService{}, InboundService{}
 	seedPortalClient(t, &svc, &inboundSvc, "c2@example.com", 1800000000000)
-	if _, err := svc.CreateCustomer("carol", "pw", "c2@example.com"); err != nil {
+	if _, err := svc.CreateCustomer("carol", "pw", "c2@example.com", 100); err != nil {
 		t.Fatalf("CreateCustomer: %v", err)
 	}
 	codes, err := svc.GenerateCoupons(2, 500, "T-", "batch1", 0)
@@ -127,7 +127,7 @@ func TestRenewCustomer(t *testing.T) {
 	}
 	// Expired client: renewal starts from now, not the past expiry.
 	seedPortalClient(t, &svc, &inboundSvc, "c3@example.com", 1000000000000)
-	if _, err := svc.CreateCustomer("dave", "pw", "c3@example.com"); err != nil {
+	if _, err := svc.CreateCustomer("dave", "pw", "c3@example.com", 100); err != nil {
 		t.Fatalf("CreateCustomer: %v", err)
 	}
 	codes, err := svc.GenerateCoupons(1, 10000, "", "b2", 0)
@@ -189,7 +189,7 @@ func TestRenewCustomer_UnlimitedRejected(t *testing.T) {
 	setupPortalDB(t)
 	svc, inboundSvc := ClientService{}, InboundService{}
 	seedPortalClient(t, &svc, &inboundSvc, "c4@example.com", 0)
-	if _, err := svc.CreateCustomer("erin", "pw", "c4@example.com"); err != nil {
+	if _, err := svc.CreateCustomer("erin", "pw", "c4@example.com", 100); err != nil {
 		t.Fatalf("CreateCustomer: %v", err)
 	}
 	if _, _, err := svc.RenewCustomer(&inboundSvc, "erin", 30); err == nil {

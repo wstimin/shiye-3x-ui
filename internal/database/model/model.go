@@ -181,15 +181,16 @@ type ApiToken struct {
 // CustomerAccount is a portal login bound to one xray client via Email.
 // Balance is in cents; it only changes through the WalletTxn ledger.
 type CustomerAccount struct {
-	Id           int    `json:"id" gorm:"primaryKey;autoIncrement"`
-	Username     string `json:"username" gorm:"uniqueIndex;not null"`
-	PasswordHash string `json:"-" gorm:"column:password_hash;not null"`
-	Email        string `json:"email" gorm:"index;not null"`
-	BalanceCents int64  `json:"balanceCents" gorm:"column:balance_cents;default:0"`
-	LoginEpoch   int64  `json:"-" gorm:"column:login_epoch;default:0"`
-	Enable       bool   `json:"enable" gorm:"default:true"`
-	CreatedAt    int64  `json:"createdAt" gorm:"autoCreateTime:milli"`
-	UpdatedAt    int64  `json:"updatedAt" gorm:"autoUpdateTime:milli"`
+	Id                int    `json:"id" gorm:"primaryKey;autoIncrement"`
+	Username          string `json:"username" gorm:"uniqueIndex;not null"`
+	PasswordHash      string `json:"-" gorm:"column:password_hash;not null"`
+	Email             string `json:"email" gorm:"index;not null"`
+	BalanceCents      int64  `json:"balanceCents" gorm:"column:balance_cents;default:0"`
+	MonthlyPriceCents int64  `json:"monthlyPriceCents" gorm:"column:monthly_price_cents;default:0"`
+	LoginEpoch        int64  `json:"-" gorm:"column:login_epoch;default:0"`
+	Enable            bool   `json:"enable" gorm:"default:true"`
+	CreatedAt         int64  `json:"createdAt" gorm:"autoCreateTime:milli"`
+	UpdatedAt         int64  `json:"updatedAt" gorm:"autoUpdateTime:milli"`
 }
 
 func (CustomerAccount) TableName() string { return "customer_accounts" }

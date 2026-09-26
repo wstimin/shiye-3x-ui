@@ -128,6 +128,9 @@ func initModels() error {
 			return err
 		}
 	}
+	if err := migrateCustomerMonthlyPrice(); err != nil {
+		return err
+	}
 	if err := dropLegacyInboundPortUnique(); err != nil {
 		return err
 	}
@@ -192,6 +195,13 @@ func initModels() error {
 		}
 	}
 	return nil
+}
+
+func migrateCustomerMonthlyPrice() error {
+	if !db.Migrator().HasColumn(&model.CustomerAccount{}, "monthly_price_cents") {
+		return nil
+	}
+	return db.Exec("UPDATE customer_accounts SET monthly_price_cents = 0 WHERE monthly_price_cents IS NULL").Error
 }
 
 func postgresModelSettled(mdl any) bool {

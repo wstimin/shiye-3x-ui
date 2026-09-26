@@ -113,8 +113,10 @@ func EmbeddedDist() embed.FS {
 
 // Server represents the main web server for the 3x-ui panel with controllers, services, and scheduled jobs.
 type Server struct {
-	httpServer *http.Server
-	listener   net.Listener
+	httpServer       *http.Server
+	listener         net.Listener
+	portalHTTPServer *http.Server
+	portalListener   net.Listener
 
 	index  *controller.IndexController
 	panel  *controller.XUIController
@@ -216,7 +218,6 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	}
 	store.Options(sessionOptions)
 	engine.Use(sessions.Sessions("3x-ui", store))
-	controller.SetPortalSessionStore(secret, sessionOptions)
 	engine.Use(func(c *gin.Context) {
 		c.Set("base_path", basePath)
 	})
@@ -288,6 +289,90 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	})
 
 	return engine, nil
+}
+
+func (s *Server) initPortalRouter(secureCookie bool) (*gin.Engine, error) {
+	engine := gin.New()
+	engine.Use(gin.Recovery())
+	engine.Use(middleware.SecurityHeadersMiddleware(secureCookie))
+	engine.Use(gzip.Gzip(gzip.DefaultCompression))
+	engine.Use(func(c *gin.Context) { c.Set("base_path", "/") })
+	engine.Use(locale.LocalizerMiddleware())
+
+	secret, err := s.settingService.GetSecret()
+	if err != nil {
+		return nil, err
+	}
+	portalSessionOptions := sessions.Options{
+		Path: "/", HttpOnly: true, Secure: secureCookie, SameSite: http.SameSiteLaxMode,
+	}
+	if sessionMaxAge, maxAgeErr := s.settingService.GetSessionMaxAge(); maxAgeErr == nil && sessionMaxAge > 0 {
+		portalSessionOptions.MaxAge = sessionMaxAge * 60
+	}
+	controller.SetPortalSessionStore(secret, portalSessionOptions)
+	if config.IsDebug() {
+		engine.StaticFS("/assets", http.FS(os.DirFS("internal/web/dist/assets")))
+	} else {
+		engine.StaticFS("/assets", http.FS(&wrapDistFS{FS: distFS}))
+	}
+	engine.GET("/", func(c *gin.Context) { c.Redirect(http.StatusTemporaryRedirect, "/portal") })
+	controller.NewPortalPublicController(engine.Group("/"))
+	return engine, nil
+}
+
+func (s *Server) startPortalServer() error {
+	enabled, err := s.settingService.GetPortalEnabled()
+	if err != nil || !enabled {
+		return err
+	}
+	listen, err := s.settingService.GetPortalListen()
+	if err != nil {
+		return err
+	}
+	port, err := s.settingService.GetPortalPort()
+	if err != nil {
+		return err
+	}
+	panelPort, err := s.settingService.GetPort()
+	if err != nil {
+		return err
+	}
+	if port == panelPort {
+		return fmt.Errorf("customer portal port %d conflicts with panel port", port)
+	}
+	listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", net.JoinHostPort(listen, strconv.Itoa(port)))
+	if err != nil {
+		return err
+	}
+	certFile, _ := s.settingService.GetCertFile()
+	keyFile, _ := s.settingService.GetKeyFile()
+	secureCookie := false
+	if publicURL, _ := s.settingService.GetPortalPublicURL(); strings.HasPrefix(publicURL, "https://") {
+		secureCookie = true
+	}
+	if certFile != "" && keyFile != "" {
+		cert, certErr := tls.LoadX509KeyPair(certFile, keyFile)
+		if certErr != nil {
+			_ = listener.Close()
+			return certErr
+		}
+		listener = network.NewAutoHttpsListener(listener)
+		listener = tls.NewListener(listener, &tls.Config{Certificates: []tls.Certificate{cert}})
+		secureCookie = true
+	}
+	engine, err := s.initPortalRouter(secureCookie)
+	if err != nil {
+		_ = listener.Close()
+		return err
+	}
+	s.portalListener = listener
+	s.portalHTTPServer = &http.Server{
+		Handler: engine, ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 120 * time.Second,
+	}
+	logger.Info("Customer portal server running on", listener.Addr())
+	go network.ServeHTTP(s.portalHTTPServer, listener, "Customer portal server")
+	return nil
 }
 
 // Background-job cadences. Centralized here as the single tuning surface; the
@@ -662,6 +747,9 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 	}
 
 	go network.ServeHTTP(s.httpServer, listener, "Web server")
+	if portalErr := s.startPortalServer(); portalErr != nil {
+		logger.Error("Customer portal server failed to start: ", portalErr)
+	}
 
 	// Create event bus before startTask so jobs can use it
 	s.bus = eventbus.New(eventbus.DefaultBufferSize)
@@ -825,6 +913,8 @@ func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 	}
 	var err1 error
 	var err2 error
+	var err3 error
+	var err4 error
 	if s.httpServer != nil {
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer shutdownCancel()
@@ -833,7 +923,15 @@ func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 	if s.listener != nil {
 		err2 = s.listener.Close()
 	}
-	return common.Combine(err1, err2)
+	if s.portalHTTPServer != nil {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer shutdownCancel()
+		err3 = s.portalHTTPServer.Shutdown(shutdownCtx)
+	}
+	if s.portalListener != nil {
+		err4 = s.portalListener.Close()
+	}
+	return common.Combine(common.Combine(err1, err2), common.Combine(err3, err4))
 }
 
 // GetCtx returns the server's context for cancellation and deadline management.

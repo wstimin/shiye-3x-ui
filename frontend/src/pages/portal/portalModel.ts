@@ -11,6 +11,7 @@ export interface PortalMe {
   username: string;
   email: string;
   balanceCents: number;
+  pricePerMonthCents: number;
   expiryTime: number;
   traffic: {
     up: number;
