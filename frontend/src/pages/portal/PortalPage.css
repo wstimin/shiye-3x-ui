@@ -414,6 +414,11 @@
   font-weight: 700;
   box-shadow: inset 3px 0 0 #2563eb;
 }
+.x-user-center .sidebar-nav-item:focus-visible,
+.x-user-center .portal-mobile-nav button:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.22);
+  outline-offset: 2px;
+}
 .x-user-center .sidebar-count {
   margin-left: auto;
   min-width: 22px;
@@ -463,6 +468,10 @@
   min-width: 0;
   background: transparent;
 }
+.x-user-center .portal-toolbar {
+  position: static;
+  inset: auto;
+}
 .x-user-center .portal-topbar {
   display: flex;
   align-items: center;
@@ -498,6 +507,12 @@
 }
 .x-user-center .portal-topbar-user .ant-btn {
   color: #8090a7;
+}
+.x-user-center .portal-mobile-nav {
+  display: none;
+}
+.x-user-center .portal-view {
+  animation: portal-section-in 220ms var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1)) both;
 }
 .x-user-center .portal-welcome-strip {
   position: relative;
@@ -663,6 +678,43 @@
   .x-user-center .portal-topbar-user .ant-btn {
     display: none;
   }
+  .x-user-center .portal-mobile-nav {
+    position: sticky;
+    top: 0;
+    z-index: 8;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    margin: 14px 12px 0;
+    padding: 6px;
+    border: 1px solid rgba(218, 229, 242, 0.9);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 8px 24px rgba(54, 104, 164, 0.1);
+    backdrop-filter: blur(16px);
+  }
+  .x-user-center .portal-mobile-nav button {
+    display: grid;
+    place-items: center;
+    gap: 3px;
+    min-width: 0;
+    padding: 8px 4px;
+    border: 0;
+    border-radius: 11px;
+    color: #718097;
+    background: transparent;
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .x-user-center .portal-mobile-nav button svg {
+    font-size: 16px;
+  }
+  .x-user-center .portal-mobile-nav button.is-active {
+    color: #2159d1;
+    background: #eaf1ff;
+    font-weight: 700;
+  }
   .x-user-center .portal-content-wrap {
     padding: 22px 12px 45px;
   }
@@ -680,6 +732,9 @@
     width: 52px;
     height: 52px;
     font-size: 21px;
+  }
+  .x-user-center .portal-account-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -774,6 +829,9 @@
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.58);
   animation: portal-section-in 260ms var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1)) both;
+}
+.x-user-center .portal-section-first {
+  margin-top: 4px;
 }
 .x-user-center .portal-section:nth-of-type(2) {
   animation-delay: 50ms;
@@ -882,8 +940,64 @@
   border-radius: 14px;
   background: #f5f9ff;
 }
+.x-user-center .portal-account-avatar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e4edf8;
+}
+.x-user-center .portal-account-avatar .ant-avatar {
+  color: #fff;
+  background: linear-gradient(145deg, #2563eb, #18b6c9);
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.2);
+}
+.x-user-center .portal-account-avatar h3 {
+  margin: 0 0 3px;
+  font-size: 19px;
+}
+.x-user-center .portal-account-avatar span,
+.x-user-center .portal-account-grid span,
+.x-user-center .portal-account-note {
+  color: var(--portal-muted);
+  font-size: 12px;
+}
+.x-user-center .portal-account-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+.x-user-center .portal-account-grid > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid #e0eaf6;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.7);
+}
+.x-user-center .portal-account-grid strong {
+  overflow: hidden;
+  color: var(--portal-ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.x-user-center .portal-account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 20px;
+}
+.x-user-center .portal-account-note {
+  margin: 14px 0 0;
+}
 
 @media (hover: hover) and (pointer: fine) {
+  .x-user-center .sidebar-nav-item:hover {
+    color: #2159d1;
+    background: rgba(234, 241, 255, 0.72);
+  }
   .x-user-center .portal-balance-card:hover {
     transform: translateY(-3px);
     box-shadow: 0 15px 32px rgba(49, 93, 143, 0.14);
@@ -943,6 +1057,7 @@
   .x-user-center::before,
   .x-user-center::after,
   .x-user-center .portal-content-wrap,
+  .x-user-center .portal-view,
   .x-user-center .portal-section {
     animation: none;
   }
