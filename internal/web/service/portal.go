@@ -417,15 +417,19 @@ func (s *SettingService) SetPortalCardProviderURL(v string) error {
 	}
 	return s.setString(PortalCardProviderURLKey, clean)
 }
+
 func (s *SettingService) GetPortalCardProviderSecret() (string, error) {
 	return s.getString(PortalCardProviderSecretKey)
 }
+
 func (s *SettingService) SetPortalCardProviderSecret(v string) error {
 	return s.setString(PortalCardProviderSecretKey, strings.TrimSpace(v))
 }
+
 func (s *SettingService) GetPortalCardProviderSign() (string, error) {
 	return s.getString(PortalCardProviderSignKey)
 }
+
 func (s *SettingService) SetPortalCardProviderSign(v string) error {
 	return s.setString(PortalCardProviderSignKey, strings.TrimSpace(v))
 }

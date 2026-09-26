@@ -108,7 +108,6 @@
     "saveQr": "儲存 QR 碼"
   },
   "portal": {
-    "title": "我的帳戶",
     "welcome": "歡迎回來",
     "loginFailed": "使用者名稱或密碼錯誤。",
     "balance": "餘額",
@@ -119,12 +118,10 @@
     "redeem": "儲值",
     "redeemSuccess": "儲值成功",
     "redeemFailed": "儲值失敗",
-    "buyCode": "購買卡密",
     "history": "最近記錄",
     "renewTitle": "續期服務",
     "renew": "續期",
     "customDays": "自訂天數",
-    "days": "{count} 天",
     "renewHint": "餘額 {balance}，費用 {cost}",
     "confirmRenew": "確認（{cost}）",
     "renewSuccess": "續期成功",
@@ -138,6 +135,7 @@
     "dashboard": "系統狀態",
     "inbounds": "入站",
     "clients": "客戶端",
+    "portalManagement": "客戶門戶",
     "groups": "群組",
     "nodes": "節點",
     "settings": "面板設定",

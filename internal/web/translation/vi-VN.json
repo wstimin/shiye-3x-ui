@@ -108,7 +108,6 @@
     "saveQr": "Lưu QR"
   },
   "portal": {
-    "title": "Tài khoản",
     "welcome": "Chào mừng",
     "loginFailed": "Tên đăng nhập hoặc mật khẩu không đúng.",
     "balance": "Số dư",
@@ -119,12 +118,10 @@
     "redeem": "Đổi mã",
     "redeemSuccess": "Nạp tiền thành công",
     "redeemFailed": "Nạp tiền thất bại",
-    "buyCode": "Mua mã coupon",
     "history": "Hoạt động gần đây",
     "renewTitle": "Gia hạn dịch vụ",
     "renew": "Gia hạn",
     "customDays": "Số ngày tùy chỉnh",
-    "days": "{count} ngày",
     "renewHint": "Số dư {balance}, chi phí {cost}",
     "confirmRenew": "Xác nhận ({cost})",
     "renewSuccess": "Gia hạn thành công",
@@ -138,6 +135,7 @@
     "dashboard": "Trạng thái hệ thống",
     "inbounds": "Inbound",
     "clients": "Khách hàng",
+    "portalManagement": "Cổng khách hàng",
     "groups": "Nhóm",
     "nodes": "Nút",
     "settings": "Cài đặt bảng điều khiển",

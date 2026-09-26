@@ -108,7 +108,6 @@
     "saveQr": "Guardar QR"
   },
   "portal": {
-    "title": "Cuenta",
     "welcome": "Bienvenido",
     "loginFailed": "Usuario o contraseña no válidos.",
     "balance": "Saldo",
@@ -119,12 +118,10 @@
     "redeem": "Canjear",
     "redeemSuccess": "Recarga realizada",
     "redeemFailed": "Error al recargar",
-    "buyCode": "Comprar un cupón",
     "history": "Actividad reciente",
     "renewTitle": "Renovar servicio",
     "renew": "Renovar",
     "customDays": "Días personalizados",
-    "days": "{count} días",
     "renewHint": "Saldo {balance}, coste {cost}",
     "confirmRenew": "Confirmar ({cost})",
     "renewSuccess": "Renovación realizada",
@@ -138,6 +135,7 @@
     "dashboard": "Estado del Sistema",
     "inbounds": "Entradas",
     "clients": "Clientes",
+    "portalManagement": "Portal de clientes",
     "groups": "Grupos",
     "nodes": "Nodos",
     "settings": "Ajustes del panel",

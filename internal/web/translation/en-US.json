@@ -108,7 +108,6 @@
     "saveQr": "Save QR"
   },
   "portal": {
-    "title": "Account",
     "welcome": "Welcome back",
     "loginFailed": "Invalid username or password.",
     "balance": "Balance",
@@ -119,12 +118,10 @@
     "redeem": "Redeem",
     "redeemSuccess": "Recharged successfully",
     "redeemFailed": "Recharge failed",
-    "buyCode": "Buy a coupon code",
     "history": "Recent activity",
     "renewTitle": "Renew service",
     "renew": "Renew",
     "customDays": "Custom days",
-    "days": "{count} days",
     "renewHint": "Balance {balance}, cost {cost}",
     "confirmRenew": "Confirm ({cost})",
     "renewSuccess": "Renewed successfully",
@@ -138,6 +135,7 @@
     "dashboard": "Overview",
     "inbounds": "Inbounds",
     "clients": "Clients",
+    "portalManagement": "Customer portal",
     "groups": "Groups",
     "nodes": "Nodes",
     "hosts": "Hosts",

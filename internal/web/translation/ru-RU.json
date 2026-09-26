@@ -108,7 +108,6 @@
     "saveQr": "Сохранить QR"
   },
   "portal": {
-    "title": "Аккаунт",
     "welcome": "Добро пожаловать",
     "loginFailed": "Неверное имя пользователя или пароль.",
     "balance": "Баланс",
@@ -119,12 +118,10 @@
     "redeem": "Погасить",
     "redeemSuccess": "Пополнение выполнено",
     "redeemFailed": "Ошибка пополнения",
-    "buyCode": "Купить купон",
     "history": "Последняя активность",
     "renewTitle": "Продление сервиса",
     "renew": "Продлить",
     "customDays": "Своё число дней",
-    "days": "{count} дн.",
     "renewHint": "Баланс {balance}, стоимость {cost}",
     "confirmRenew": "Подтвердить ({cost})",
     "renewSuccess": "Продление выполнено",
@@ -138,6 +135,7 @@
     "dashboard": "Дашборд",
     "inbounds": "Входящие",
     "clients": "Клиенты",
+    "portalManagement": "Клиентский портал",
     "groups": "Группы",
     "nodes": "Узлы",
     "settings": "Настройки панели",

@@ -108,7 +108,6 @@
     "saveQr": "Simpan QR"
   },
   "portal": {
-    "title": "Akun",
     "welcome": "Selamat datang",
     "loginFailed": "Nama pengguna atau kata sandi salah.",
     "balance": "Saldo",
@@ -119,12 +118,10 @@
     "redeem": "Tukarkan",
     "redeemSuccess": "Isi ulang berhasil",
     "redeemFailed": "Isi ulang gagal",
-    "buyCode": "Beli kupon",
     "history": "Aktivitas terbaru",
     "renewTitle": "Perpanjang layanan",
     "renew": "Perpanjang",
     "customDays": "Hari kustom",
-    "days": "{count} hari",
     "renewHint": "Saldo {balance}, biaya {cost}",
     "confirmRenew": "Konfirmasi ({cost})",
     "renewSuccess": "Perpanjangan berhasil",
@@ -138,6 +135,7 @@
     "dashboard": "Ikhtisar",
     "inbounds": "Inbound",
     "clients": "Klien",
+    "portalManagement": "Portal pelanggan",
     "groups": "Grup",
     "nodes": "Node",
     "settings": "Pengaturan Panel",

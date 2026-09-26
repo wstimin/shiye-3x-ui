@@ -108,7 +108,6 @@
     "saveQr": "QR を保存"
   },
   "portal": {
-    "title": "アカウント",
     "welcome": "ようこそ",
     "loginFailed": "ユーザー名またはパスワードが正しくありません。",
     "balance": "残高",
@@ -119,12 +118,10 @@
     "redeem": "チャージする",
     "redeemSuccess": "チャージしました",
     "redeemFailed": "チャージに失敗しました",
-    "buyCode": "クーポンを購入",
     "history": "履歴",
     "renewTitle": "サービス更新",
     "renew": "更新",
     "customDays": "日数を指定",
-    "days": "{count}日",
     "renewHint": "残高 {balance}、料金 {cost}",
     "confirmRenew": "確定（{cost}）",
     "renewSuccess": "更新しました",
@@ -138,6 +135,7 @@
     "dashboard": "ダッシュボード",
     "inbounds": "インバウンド",
     "clients": "クライアント",
+    "portalManagement": "カスタマーポータル",
     "groups": "グループ",
     "nodes": "ノード",
     "settings": "パネル設定",

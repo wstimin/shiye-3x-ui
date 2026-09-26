@@ -108,7 +108,6 @@
     "saveQr": "QR'ı kaydet"
   },
   "portal": {
-    "title": "Hesap",
     "welcome": "Hoş geldiniz",
     "loginFailed": "Kullanıcı adı veya şifre hatalı.",
     "balance": "Bakiye",
@@ -119,12 +118,10 @@
     "redeem": "Bozdur",
     "redeemSuccess": "Yükleme başarılı",
     "redeemFailed": "Yükleme başarısız",
-    "buyCode": "Kupon satın al",
     "history": "Son işlemler",
     "renewTitle": "Hizmeti yenile",
     "renew": "Yenile",
     "customDays": "Özel gün",
-    "days": "{count} gün",
     "renewHint": "Bakiye {balance}, ücret {cost}",
     "confirmRenew": "Onayla ({cost})",
     "renewSuccess": "Yenileme başarılı",
@@ -138,6 +135,7 @@
     "dashboard": "Genel Bakış",
     "inbounds": "Gelen Bağlantılar",
     "clients": "Kullanıcılar",
+    "portalManagement": "Müşteri portalı",
     "groups": "Gruplar",
     "nodes": "Düğümler",
     "settings": "Panel Ayarları",

@@ -108,7 +108,6 @@
     "saveQr": "ذخیره QR"
   },
   "portal": {
-    "title": "حساب کاربری",
     "welcome": "خوش آمدید",
     "loginFailed": "نام کاربری یا رمز عبور اشتباه است.",
     "balance": "موجودی",
@@ -119,12 +118,10 @@
     "redeem": "شارژ کردن",
     "redeemSuccess": "شارژ با موفقیت انجام شد",
     "redeemFailed": "شارژ ناموفق بود",
-    "buyCode": "خرید کد شارژ",
     "history": "فعالیت‌های اخیر",
     "renewTitle": "تمدید سرویس",
     "renew": "تمدید",
     "customDays": "تعداد روز دلخواه",
-    "days": "{count} روز",
     "renewHint": "موجودی {balance}، هزینه {cost}",
     "confirmRenew": "تأیید ({cost})",
     "renewSuccess": "تمدید با موفقیت انجام شد",
@@ -138,6 +135,7 @@
     "dashboard": "نمای کلی",
     "inbounds": "ورودی‌ها",
     "clients": "کلاینت‌ها",
+    "portalManagement": "پرتال مشتریان",
     "groups": "گروه‌ها",
     "nodes": "نودها",
     "settings": "تنظیمات پنل",

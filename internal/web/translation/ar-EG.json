@@ -108,7 +108,6 @@
     "saveQr": "حفظ QR"
   },
   "portal": {
-    "title": "الحساب",
     "welcome": "مرحباً بك",
     "loginFailed": "اسم المستخدم أو كلمة المرور غير صحيحة.",
     "balance": "الرصيد",
@@ -119,12 +118,10 @@
     "redeem": "شحن",
     "redeemSuccess": "تم الشحن بنجاح",
     "redeemFailed": "فشل الشحن",
-    "buyCode": "شراء كود شحن",
     "history": "النشاط الأخير",
     "renewTitle": "تجديد الخدمة",
     "renew": "تجديد",
     "customDays": "عدد أيام مخصص",
-    "days": "{count} أيام",
     "renewHint": "الرصيد {balance}، التكلفة {cost}",
     "confirmRenew": "تأكيد ({cost})",
     "renewSuccess": "تم التجديد بنجاح",
@@ -138,6 +135,7 @@
     "dashboard": "نظرة عامة",
     "inbounds": "الواردات",
     "clients": "العملاء",
+    "portalManagement": "بوابة العملاء",
     "groups": "المجموعات",
     "nodes": "النودز",
     "settings": "إعدادات اللوحة",
