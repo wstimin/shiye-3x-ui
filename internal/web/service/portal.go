@@ -2,8 +2,10 @@ package service
 
 import (
 	"crypto/subtle"
+	"encoding/json"
 	"errors"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -52,6 +54,196 @@ const maxPortalUsername = 64
 // both calculate from the same pre-update expiry and charge twice for one
 // extension.
 var portalRenewMu sync.Mutex
+
+// PortalSettings is the complete persisted configuration for the independent
+// customer portal. Saving it as one unit prevents a request from leaving only
+// some form fields updated when a later field is invalid.
+type PortalSettings struct {
+	PricePerMonthCents int64
+	Plans              string
+	PurchaseURL        string
+	SiteTitle          string
+	CardProviderURL    string
+	CardProviderSecret string
+	CardProviderSign   string
+	Enabled            bool
+	Listen             string
+	Port               int
+	PublicURL          string
+}
+
+func normalizePortalPlans(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "[1,3,6]", nil
+	}
+	var values []any
+	if err := json.Unmarshal([]byte(raw), &values); err != nil || len(values) == 0 {
+		return "", common.NewError("renewal month options must be a non-empty JSON array")
+	}
+	seen := make(map[int]bool, len(values))
+	for _, value := range values {
+		months := 0
+		switch item := value.(type) {
+		case float64:
+			months = int(item)
+			if item != float64(months) {
+				return "", common.NewError("renewal months must be whole numbers")
+			}
+		case map[string]any:
+			number, ok := item["months"].(float64)
+			months = int(number)
+			if !ok || number != float64(months) {
+				return "", common.NewError("each renewal option must contain a whole-number months value")
+			}
+		default:
+			return "", common.NewError("invalid renewal month option")
+		}
+		if months < 1 || months > 120 {
+			return "", common.NewError("renewal months must be between 1 and 120")
+		}
+		if seen[months] {
+			return "", common.NewError("renewal month options cannot contain duplicates")
+		}
+		seen[months] = true
+	}
+	canonical, err := json.Marshal(values)
+	if err != nil {
+		return "", err
+	}
+	return string(canonical), nil
+}
+
+func (s *SettingService) normalizePortalSettings(settings PortalSettings) (PortalSettings, error) {
+	if settings.PricePerMonthCents < 0 || (strconv.IntSize == 32 && settings.PricePerMonthCents > int64(^uint32(0)>>1)) {
+		return settings, common.NewError("monthly price is outside the supported range")
+	}
+	plans, err := normalizePortalPlans(settings.Plans)
+	if err != nil {
+		return settings, err
+	}
+	purchaseURL, err := SanitizeHTTPURL(settings.PurchaseURL)
+	if err != nil {
+		return settings, err
+	}
+	providerURL, err := SanitizeHTTPURL(settings.CardProviderURL)
+	if err != nil {
+		return settings, err
+	}
+	publicURL, err := SanitizeHTTPURL(settings.PublicURL)
+	if err != nil {
+		return settings, err
+	}
+	settings.Listen = strings.TrimSpace(settings.Listen)
+	if settings.Listen == "" {
+		settings.Listen = "0.0.0.0"
+	}
+	if net.ParseIP(settings.Listen) == nil {
+		return settings, common.NewError("portal listen address must be an IP address")
+	}
+	if settings.Port < 1 || settings.Port > 65535 {
+		return settings, common.NewError("portal port must be between 1 and 65535")
+	}
+	panelPort, err := s.GetPort()
+	if err != nil {
+		return settings, err
+	}
+	if settings.Port == panelPort {
+		return settings, common.NewError("portal port must differ from panel port")
+	}
+	settings.Plans = plans
+	settings.PurchaseURL = purchaseURL
+	settings.SiteTitle = strings.TrimSpace(settings.SiteTitle)
+	if settings.SiteTitle == "" {
+		settings.SiteTitle = PortalDefaultSiteTitle
+	}
+	settings.CardProviderURL = providerURL
+	settings.CardProviderSecret = strings.TrimSpace(settings.CardProviderSecret)
+	settings.CardProviderSign = strings.TrimSpace(settings.CardProviderSign)
+	settings.PublicURL = strings.TrimRight(publicURL, "/")
+	return settings, nil
+}
+
+// SavePortalSettings validates every editable field first, then writes all
+// values in one database transaction.
+func (s *SettingService) SavePortalSettings(settings PortalSettings) (PortalSettings, error) {
+	normalized, err := s.normalizePortalSettings(settings)
+	if err != nil {
+		return settings, err
+	}
+	values := map[string]string{
+		PortalPricePerMonthCentsKey: strconv.FormatInt(normalized.PricePerMonthCents, 10),
+		PortalPlansKey:              normalized.Plans,
+		PortalPurchaseURLKey:        normalized.PurchaseURL,
+		PortalSiteTitleKey:          normalized.SiteTitle,
+		PortalCardProviderURLKey:    normalized.CardProviderURL,
+		PortalCardProviderSecretKey: normalized.CardProviderSecret,
+		PortalCardProviderSignKey:   normalized.CardProviderSign,
+		PortalEnabledKey:            strconv.FormatBool(normalized.Enabled),
+		PortalListenKey:             normalized.Listen,
+		PortalPortKey:               strconv.Itoa(normalized.Port),
+		PortalPublicURLKey:          normalized.PublicURL,
+	}
+	err = database.GetDB().Transaction(func(tx *gorm.DB) error {
+		for key, value := range values {
+			var setting model.Setting
+			findErr := tx.Where("key = ?", key).First(&setting).Error
+			if database.IsNotFound(findErr) {
+				if err := tx.Create(&model.Setting{Key: key, Value: value}).Error; err != nil {
+					return err
+				}
+				continue
+			}
+			if findErr != nil {
+				return findErr
+			}
+			if err := tx.Model(&setting).Update("value", value).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return normalized, err
+}
+
+func (s *SettingService) GetPortalSettings() (PortalSettings, error) {
+	var out PortalSettings
+	var err error
+	if out.PricePerMonthCents, err = s.GetPortalPricePerMonthCents(); err != nil {
+		return out, err
+	}
+	if out.Plans, err = s.GetPortalPlans(); err != nil {
+		return out, err
+	}
+	if out.PurchaseURL, err = s.GetPortalPurchaseURL(); err != nil {
+		return out, err
+	}
+	if out.SiteTitle, err = s.GetPortalSiteTitle(); err != nil {
+		return out, err
+	}
+	if out.CardProviderURL, err = s.GetPortalCardProviderURL(); err != nil {
+		return out, err
+	}
+	if out.CardProviderSecret, err = s.GetPortalCardProviderSecret(); err != nil {
+		return out, err
+	}
+	if out.CardProviderSign, err = s.GetPortalCardProviderSign(); err != nil {
+		return out, err
+	}
+	if out.Enabled, err = s.GetPortalEnabled(); err != nil {
+		return out, err
+	}
+	if out.Listen, err = s.GetPortalListen(); err != nil {
+		return out, err
+	}
+	if out.Port, err = s.GetPortalPort(); err != nil {
+		return out, err
+	}
+	if out.PublicURL, err = s.GetPortalPublicURL(); err != nil {
+		return out, err
+	}
+	return out, nil
+}
 
 // CreateCustomer creates a portal login bound to an existing client email.
 func (s *ClientService) CreateCustomer(username, password, email string, monthlyPriceCents int64) (*model.CustomerAccount, error) {

@@ -1,15 +1,15 @@
 package controller
 
 import (
+	"errors"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/wstimin/shiye-3x-ui/v3/internal/database"
 	"github.com/wstimin/shiye-3x-ui/v3/internal/database/model"
+	"github.com/wstimin/shiye-3x-ui/v3/internal/web/global"
 	"github.com/wstimin/shiye-3x-ui/v3/internal/web/middleware"
 	"github.com/wstimin/shiye-3x-ui/v3/internal/web/service"
-	"github.com/wstimin/shiye-3x-ui/v3/internal/web/service/panel"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
@@ -37,7 +37,6 @@ type PortalController struct {
 	clientService  service.ClientService
 	inboundService service.InboundService
 	settingService service.SettingService
-	panelService   panel.PanelService
 }
 
 // NewPortalController registers protected portal management routes.
@@ -427,6 +426,7 @@ func (a *PortalController) txns(c *gin.Context) {
 
 // publicPlans exposes monthly billing info and the separate purchase URL (no auth).
 func (a *PortalController) publicPlans(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
 	price, _ := a.settingService.GetPortalPricePerMonthCents()
 	plans, _ := a.settingService.GetPortalPlans()
 	purchaseURL, _ := a.settingService.GetPortalPurchaseURL()
@@ -603,22 +603,29 @@ func (a *PortalController) adminDisableCoupon(c *gin.Context) {
 
 // adminGetBilling returns the portal pricing + branding the admin configured.
 func (a *PortalController) adminGetBilling(c *gin.Context) {
-	price, _ := a.settingService.GetPortalPricePerMonthCents()
-	plans, _ := a.settingService.GetPortalPlans()
-	purchaseURL, _ := a.settingService.GetPortalPurchaseURL()
-	title, _ := a.settingService.GetPortalSiteTitle()
-	providerURL, _ := a.settingService.GetPortalCardProviderURL()
-	portalEnabled, _ := a.settingService.GetPortalEnabled()
-	portalListen, _ := a.settingService.GetPortalListen()
-	portalPort, _ := a.settingService.GetPortalPort()
-	portalPublicURL, _ := a.settingService.GetPortalPublicURL()
-	jsonObj(c, gin.H{
-		"pricePerMonthCents": price, "plans": plans,
-		"purchaseUrl": purchaseURL, "siteTitle": title,
-		"cardProviderUrl": providerURL, "cardProviderConfigured": providerURL != "",
-		"portalEnabled": portalEnabled, "portalListen": portalListen,
-		"portalPort": portalPort, "portalPublicUrl": portalPublicURL,
-	}, nil)
+	settings, err := a.settingService.GetPortalSettings()
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	jsonObj(c, portalBillingObject(settings), nil)
+}
+
+func portalBillingObject(settings service.PortalSettings) gin.H {
+	return gin.H{
+		"pricePerMonthCents":           settings.PricePerMonthCents,
+		"plans":                        settings.Plans,
+		"purchaseUrl":                  settings.PurchaseURL,
+		"siteTitle":                    settings.SiteTitle,
+		"cardProviderUrl":              settings.CardProviderURL,
+		"cardProviderConfigured":       settings.CardProviderURL != "",
+		"cardProviderSecretConfigured": settings.CardProviderSecret != "",
+		"cardProviderSignConfigured":   settings.CardProviderSign != "",
+		"portalEnabled":                settings.Enabled,
+		"portalListen":                 settings.Listen,
+		"portalPort":                   settings.Port,
+		"portalPublicUrl":              settings.PublicURL,
+	}
 }
 
 type adminBillingForm struct {
@@ -642,62 +649,45 @@ func (a *PortalController) adminUpdateBilling(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	oldEnabled, _ := a.settingService.GetPortalEnabled()
-	oldListen, _ := a.settingService.GetPortalListen()
-	oldPort, _ := a.settingService.GetPortalPort()
-	oldPublicURL, _ := a.settingService.GetPortalPublicURL()
-	if err := a.settingService.SetPortalPricePerMonthCents(form.PricePerMonthCents); err != nil {
+	oldSettings, err := a.settingService.GetPortalSettings()
+	if err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	if err := a.settingService.SetPortalPlans(form.Plans); err != nil {
+	secret := form.CardProviderSecret
+	if strings.TrimSpace(secret) == "" {
+		secret = oldSettings.CardProviderSecret
+	}
+	sign := form.CardProviderSign
+	if strings.TrimSpace(sign) == "" {
+		sign = oldSettings.CardProviderSign
+	}
+	saved, err := a.settingService.SavePortalSettings(service.PortalSettings{
+		PricePerMonthCents: form.PricePerMonthCents,
+		Plans:              form.Plans, PurchaseURL: form.PurchaseURL, SiteTitle: form.SiteTitle,
+		CardProviderURL: form.CardProviderURL, CardProviderSecret: secret, CardProviderSign: sign,
+		Enabled: form.PortalEnabled, Listen: form.PortalListen, Port: form.PortalPort,
+		PublicURL: form.PortalPublicURL,
+	})
+	if err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	if err := a.settingService.SetPortalPurchaseURL(form.PurchaseURL); err != nil {
-		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+	server := global.GetWebServer()
+	if server == nil {
+		_, _ = a.settingService.SavePortalSettings(oldSettings)
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), errors.New("web server is unavailable"))
 		return
 	}
-	if err := a.settingService.SetPortalSiteTitle(form.SiteTitle); err != nil {
-		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
-		return
-	}
-	if err := a.settingService.SetPortalCardProviderURL(form.CardProviderURL); err != nil {
-		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
-		return
-	}
-	if strings.TrimSpace(form.CardProviderSecret) != "" {
-		if err := a.settingService.SetPortalCardProviderSecret(form.CardProviderSecret); err != nil {
-			jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
-			return
+	if err := server.ReloadPortal(); err != nil {
+		_, rollbackErr := a.settingService.SavePortalSettings(oldSettings)
+		if rollbackErr == nil {
+			_ = server.ReloadPortal()
 		}
-	}
-	if strings.TrimSpace(form.CardProviderSign) != "" {
-		if err := a.settingService.SetPortalCardProviderSign(form.CardProviderSign); err != nil {
-			jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
-			return
-		}
-	}
-	if err := a.settingService.SetPortalEnabled(form.PortalEnabled); err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	if err := a.settingService.SetPortalListen(form.PortalListen); err != nil {
-		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
-		return
-	}
-	if err := a.settingService.SetPortalPort(form.PortalPort); err != nil {
-		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
-		return
-	}
-	if err := a.settingService.SetPortalPublicURL(form.PortalPublicURL); err != nil {
-		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
-		return
-	}
-	restart := oldEnabled != form.PortalEnabled || oldListen != strings.TrimSpace(form.PortalListen) ||
-		oldPort != form.PortalPort || oldPublicURL != strings.TrimRight(strings.TrimSpace(form.PortalPublicURL), "/")
-	jsonObj(c, gin.H{"restartScheduled": restart}, nil)
-	if restart {
-		_ = a.panelService.RestartPanel(2 * time.Second)
-	}
+	result := portalBillingObject(saved)
+	result["applied"] = true
+	jsonObj(c, result, nil)
 }

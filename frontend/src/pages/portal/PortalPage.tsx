@@ -129,7 +129,11 @@ export default function PortalPage() {
   const [activeSection, setActiveSection] = useState<PortalSection>('overview');
 
   const refresh = useCallback(async () => {
-    const account = await fetchMe();
+    const [account, pMsg] = await Promise.all([
+      fetchMe(),
+      HttpUtil.get<PortalPlans>('/portal/api/plans', undefined, { silent: true }),
+    ]);
+    if (pMsg.success && pMsg.obj) setPlans(pMsg.obj as PortalPlans);
     setMe(account);
     if (!account) return;
     setNowMs(Date.now());
@@ -158,6 +162,18 @@ export default function PortalPage() {
     })();
     return () => {
       cancelled = true;
+    };
+  }, [refresh]);
+
+  useEffect(() => {
+    const reloadVisiblePortal = () => {
+      if (document.visibilityState === 'visible') void refresh();
+    };
+    window.addEventListener('focus', reloadVisiblePortal);
+    document.addEventListener('visibilitychange', reloadVisiblePortal);
+    return () => {
+      window.removeEventListener('focus', reloadVisiblePortal);
+      document.removeEventListener('visibilitychange', reloadVisiblePortal);
     };
   }, [refresh]);
 
@@ -261,6 +277,11 @@ export default function PortalPage() {
   const pageClass = 'portal-page x-user-center';
 
   const siteTitle = plans?.siteTitle || 'X用户中心';
+
+  useEffect(() => {
+    document.title = siteTitle;
+  }, [siteTitle]);
+
   const balance = me?.balanceCents ?? 0;
   const totalUsed = (me?.traffic?.up ?? 0) + (me?.traffic?.down ?? 0);
   const totalQuota = me?.traffic?.total ?? 0;

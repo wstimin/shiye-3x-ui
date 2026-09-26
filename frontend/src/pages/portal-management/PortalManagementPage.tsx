@@ -76,6 +76,8 @@ interface BillingValues {
   portalListen: string;
   portalPort: number;
   portalPublicUrl: string;
+  cardProviderSecretConfigured?: boolean;
+  cardProviderSignConfigured?: boolean;
 }
 
 interface BillingFormValues extends Omit<BillingValues, 'pricePerMonthCents'> {
@@ -178,6 +180,9 @@ export default function PortalManagementPage() {
         HttpUtil.get('/panel/api/portal/customers', undefined, { silent: true }),
         HttpUtil.get('/panel/api/portal/coupons', undefined, { silent: true }),
       ]);
+      if (!billingMsg.success) throw new Error(billingMsg.msg || '读取门户设置失败');
+      if (!customerMsg.success) throw new Error(customerMsg.msg || '读取客户账号失败');
+      if (!couponMsg.success) throw new Error(couponMsg.msg || '读取卡密记录失败');
       const nextBilling = { ...emptyBilling, ...apiObject<Partial<BillingValues>>(billingMsg, {}) };
       setBilling(nextBilling);
       billingForm.setFieldsValue({
@@ -191,10 +196,12 @@ export default function PortalManagementPage() {
       });
       setCustomers(apiObject<CustomerRow[]>(customerMsg, []));
       setCoupons(apiObject<CouponRow[]>(couponMsg, []));
+    } catch (error) {
+      messageApi.error(error instanceof Error ? error.message : '读取客户门户数据失败');
     } finally {
       setLoading(false);
     }
-  }, [billingForm, providerForm]);
+  }, [billingForm, messageApi, providerForm]);
 
   useEffect(() => {
     const task = window.setTimeout(() => {
@@ -222,14 +229,26 @@ export default function PortalManagementPage() {
     };
     setSavingBilling(true);
     try {
-      const result = await HttpUtil.post<{ restartScheduled: boolean }>(
+      const result = await HttpUtil.post<BillingValues & { applied: boolean }>(
         '/panel/api/portal/billing',
         payload,
         JSON_POST_OPTIONS,
       );
-      if (!result.success) throw new Error(result.msg || '保存失败');
-      setBilling(payload);
-      messageApi.success(result.obj?.restartScheduled ? '设置已保存，服务正在重启' : '设置已保存');
+      if (!result.success || !result.obj?.applied) throw new Error(result.msg || '保存或应用失败');
+      const applied = { ...emptyBilling, ...result.obj };
+      setBilling(applied);
+      billingForm.setFieldsValue({
+        ...applied,
+        pricePerMonthYuan: centsToYuan(applied.pricePerMonthCents),
+      });
+      providerForm.setFieldsValue({
+        cardProviderUrl: applied.cardProviderUrl,
+        cardProviderSecret: '',
+        cardProviderSign: '',
+      });
+      messageApi.success(
+        applied.portalEnabled ? '设置已保存并实际应用' : '设置已保存，用户端已停用',
+      );
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : '保存失败');
     } finally {
@@ -518,7 +537,7 @@ export default function PortalManagementPage() {
                       <Alert
                         type="info"
                         showIcon
-                        message="用户中心使用独立监听端口，不会开放管理后台页面。修改监听配置后服务会自动重启。"
+                        message="用户中心使用独立监听端口，不会开放管理后台页面。保存时会先验证并立即应用监听配置，不重启管理后台。"
                         style={{ marginBottom: 18 }}
                       />
                       <Form
@@ -732,6 +751,17 @@ export default function PortalManagementPage() {
                         message="这里只保存接口配置，具体协议由你的卡密系统适配。密钥留空表示保持原值。"
                         style={{ marginBottom: 16 }}
                       />
+                      <Space wrap style={{ marginBottom: 16 }}>
+                        <Tag color={billing.cardProviderUrl ? 'green' : 'default'}>
+                          接口地址{billing.cardProviderUrl ? '已保存' : '未配置'}
+                        </Tag>
+                        <Tag color={billing.cardProviderSecretConfigured ? 'green' : 'default'}>
+                          Secret{billing.cardProviderSecretConfigured ? '已保存' : '未配置'}
+                        </Tag>
+                        <Tag color={billing.cardProviderSignConfigured ? 'green' : 'default'}>
+                          签名密钥{billing.cardProviderSignConfigured ? '已保存' : '未配置'}
+                        </Tag>
+                      </Space>
                       <Form
                         form={providerForm}
                         layout="vertical"

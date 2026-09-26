@@ -15,6 +15,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/wstimin/shiye-3x-ui/v3/internal/amneziawgnet"
@@ -117,6 +118,9 @@ type Server struct {
 	listener         net.Listener
 	portalHTTPServer *http.Server
 	portalListener   net.Listener
+	portalMu         sync.Mutex
+	portalBind       string
+	portalConfig     string
 
 	index  *controller.IndexController
 	panel  *controller.XUIController
@@ -326,29 +330,33 @@ func (s *Server) initPortalRouter(secureCookie bool) (*gin.Engine, error) {
 	return engine, nil
 }
 
-func (s *Server) startPortalServer() error {
+func (s *Server) buildPortalServer() (*http.Server, net.Listener, string, error) {
 	enabled, err := s.settingService.GetPortalEnabled()
-	if err != nil || !enabled {
-		return err
+	if err != nil {
+		return nil, nil, "", err
+	}
+	if !enabled {
+		return nil, nil, "", nil
 	}
 	listen, err := s.settingService.GetPortalListen()
 	if err != nil {
-		return err
+		return nil, nil, "", err
 	}
 	port, err := s.settingService.GetPortalPort()
 	if err != nil {
-		return err
+		return nil, nil, "", err
 	}
 	panelPort, err := s.settingService.GetPort()
 	if err != nil {
-		return err
+		return nil, nil, "", err
 	}
 	if port == panelPort {
-		return fmt.Errorf("customer portal port %d conflicts with panel port", port)
+		return nil, nil, "", fmt.Errorf("customer portal port %d conflicts with panel port", port)
 	}
-	listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", net.JoinHostPort(listen, strconv.Itoa(port)))
+	bind := net.JoinHostPort(listen, strconv.Itoa(port))
+	listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", bind)
 	if err != nil {
-		return err
+		return nil, nil, "", err
 	}
 	certFile, _ := s.settingService.GetCertFile()
 	keyFile, _ := s.settingService.GetKeyFile()
@@ -360,7 +368,7 @@ func (s *Server) startPortalServer() error {
 		cert, certErr := tls.LoadX509KeyPair(certFile, keyFile)
 		if certErr != nil {
 			_ = listener.Close()
-			return certErr
+			return nil, nil, "", certErr
 		}
 		listener = network.NewAutoHttpsListener(listener)
 		listener = tls.NewListener(listener, &tls.Config{Certificates: []tls.Certificate{cert}})
@@ -369,16 +377,101 @@ func (s *Server) startPortalServer() error {
 	engine, err := s.initPortalRouter(secureCookie)
 	if err != nil {
 		_ = listener.Close()
-		return err
+		return nil, nil, "", err
 	}
-	s.portalListener = listener
-	s.portalHTTPServer = &http.Server{
+	server := &http.Server{
 		Handler: engine, ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 120 * time.Second,
 	}
+	return server, listener, bind, nil
+}
+
+func (s *Server) startPortalServer() error {
+	return s.ReloadPortal()
+}
+
+// ReloadPortal applies the persisted portal listener configuration without
+// restarting the admin panel. A changed listener is opened before the old one
+// is closed, so an occupied/invalid port is reported while the working portal
+// remains available.
+func (s *Server) ReloadPortal() error {
+	s.portalMu.Lock()
+	defer s.portalMu.Unlock()
+
+	enabled, err := s.settingService.GetPortalEnabled()
+	if err != nil {
+		return err
+	}
+	if !enabled {
+		return s.stopPortalLocked()
+	}
+	listen, err := s.settingService.GetPortalListen()
+	if err != nil {
+		return err
+	}
+	port, err := s.settingService.GetPortalPort()
+	if err != nil {
+		return err
+	}
+	desiredBind := net.JoinHostPort(listen, strconv.Itoa(port))
+	publicURL, err := s.settingService.GetPortalPublicURL()
+	if err != nil {
+		return err
+	}
+	desiredConfig := desiredBind + "|" + publicURL
+	if s.portalHTTPServer != nil && s.portalListener != nil && s.portalConfig == desiredConfig {
+		return nil
+	}
+	// Router-only settings such as the public URL affect cookie security. They
+	// require rebuilding the handler on the same address, so release that exact
+	// listener first. A changed address is opened first below and keeps the old
+	// portal online if the requested port is unavailable.
+	if s.portalListener != nil && s.portalBind == desiredBind {
+		if err := s.stopPortalLocked(); err != nil {
+			return err
+		}
+	}
+
+	server, listener, bind, err := s.buildPortalServer()
+	if err != nil {
+		return fmt.Errorf("customer portal could not listen on %s: %w", desiredBind, err)
+	}
+	oldServer, oldListener := s.portalHTTPServer, s.portalListener
+	s.portalHTTPServer, s.portalListener, s.portalBind, s.portalConfig = server, listener, bind, desiredConfig
 	logger.Info("Customer portal server running on", listener.Addr())
-	go network.ServeHTTP(s.portalHTTPServer, listener, "Customer portal server")
+	go network.ServeHTTP(server, listener, "Customer portal server")
+	if oldServer != nil {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_ = oldServer.Shutdown(shutdownCtx)
+		shutdownCancel()
+	}
+	if oldListener != nil {
+		_ = oldListener.Close()
+	}
 	return nil
+}
+
+func (s *Server) stopPortalLocked() error {
+	var shutdownErr, closeErr error
+	if s.portalHTTPServer != nil {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		shutdownErr = s.portalHTTPServer.Shutdown(shutdownCtx)
+		shutdownCancel()
+	}
+	if s.portalListener != nil {
+		closeErr = s.portalListener.Close()
+	}
+	if errors.Is(shutdownErr, http.ErrServerClosed) || errors.Is(shutdownErr, net.ErrClosed) {
+		shutdownErr = nil
+	}
+	if errors.Is(closeErr, http.ErrServerClosed) || errors.Is(closeErr, net.ErrClosed) {
+		closeErr = nil
+	}
+	s.portalHTTPServer = nil
+	s.portalListener = nil
+	s.portalBind = ""
+	s.portalConfig = ""
+	return common.Combine(shutdownErr, closeErr)
 }
 
 // Background-job cadences. Centralized here as the single tuning surface; the
@@ -929,14 +1022,9 @@ func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 	if s.listener != nil {
 		err2 = s.listener.Close()
 	}
-	if s.portalHTTPServer != nil {
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer shutdownCancel()
-		err3 = s.portalHTTPServer.Shutdown(shutdownCtx)
-	}
-	if s.portalListener != nil {
-		err4 = s.portalListener.Close()
-	}
+	s.portalMu.Lock()
+	err3 = s.stopPortalLocked()
+	s.portalMu.Unlock()
 	return common.Combine(common.Combine(err1, err2), common.Combine(err3, err4))
 }
 
