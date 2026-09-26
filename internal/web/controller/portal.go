@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/wstimin/shiye-3x-ui/v3/internal/database"
 	"github.com/wstimin/shiye-3x-ui/v3/internal/database/model"
@@ -21,13 +22,18 @@ const portalSessionKey = "portal_user"
 
 // Portal session store: same secret as admin, separate cookie name, so the
 // two logins never share state. Set once at router init via SetPortalSessionStore.
-var portalStore sessions.Store
+var (
+	portalStore   sessions.Store
+	portalStoreMu sync.RWMutex
+)
 
 // SetPortalSessionStore installs the portal cookie store (called from web.go).
 func SetPortalSessionStore(secret []byte, opts sessions.Options) {
 	st := cookie.NewStore(secret)
 	st.Options(opts)
+	portalStoreMu.Lock()
 	portalStore = st
+	portalStoreMu.Unlock()
 }
 
 // PortalController serves customer auth, nodes, wallet and renewal through
@@ -90,10 +96,13 @@ func (a *PortalController) initAdminRouter(g *gin.RouterGroup) {
 // portalSession returns the customer-portal session (separate cookie),
 // mirroring gin-contrib's own session struct (lazy load + writer-bound save).
 func portalSession(c *gin.Context) sessions.Session {
-	if portalStore == nil {
+	portalStoreMu.RLock()
+	store := portalStore
+	portalStoreMu.RUnlock()
+	if store == nil {
 		return stubPortalSession()
 	}
-	return &portalGinSession{store: portalStore, name: "customer-portal", request: c.Request, writer: c.Writer}
+	return &portalGinSession{store: store, name: "customer-portal", request: c.Request, writer: c.Writer}
 }
 
 // portalGinSession is gin-contrib's session struct reimplemented for the
