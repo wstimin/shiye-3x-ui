@@ -138,6 +138,11 @@
 }
 
 /* Logged-in layout */
+.x-user-center.portal-page {
+  flex-direction: row;
+  align-items: stretch;
+}
+
 .portal-content-wrap {
   max-width: 880px;
   margin: 0 auto;

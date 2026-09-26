@@ -495,10 +495,10 @@ export default function PortalPage() {
     <ConfigProvider theme={themeConfig} direction={direction}>
       {messageContextHolder}
       <Layout className={pageClass} dir={direction}>
-        <aside className="portal-sidebar" aria-label="X用户中心导航">
+        <aside className="portal-sidebar" aria-label={`${siteTitle}导航`}>
           <div className="sidebar-brand">
             <span className="sidebar-logo">X</span>
-            <span>X用户中心</span>
+            <span>{siteTitle}</span>
           </div>
           <nav className="sidebar-nav">
             {navItems.map((item) => (
