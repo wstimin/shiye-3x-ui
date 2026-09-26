@@ -34,6 +34,11 @@ interface PortalLoginProps {
   onDone: () => void;
 }
 
+const JSON_POST_OPTIONS = {
+  silent: true,
+  headers: { 'Content-Type': 'application/json' },
+} as const;
+
 // Standalone customer sign-in; posts to the portal API, never to /login.
 export default function PortalLogin({ plans, onDone }: PortalLoginProps) {
   const { t } = useTranslation();
@@ -56,7 +61,7 @@ export default function PortalLogin({ plans, onDone }: PortalLoginProps) {
   const onSubmit = async (values: PortalLoginValues) => {
     setSubmitting(true);
     try {
-      const msg = await HttpUtil.post('/portal/api/auth/login', values, { silent: true });
+      const msg = await HttpUtil.post('/portal/api/auth/login', values, JSON_POST_OPTIONS);
       if (msg.success) {
         onDone();
       } else {

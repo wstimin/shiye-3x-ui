@@ -71,6 +71,11 @@ const ACCENT = {
   },
 };
 
+const JSON_POST_OPTIONS = {
+  silent: true,
+  headers: { 'Content-Type': 'application/json' },
+} as const;
+
 interface RenewState {
   open: boolean;
   months: number;
@@ -171,7 +176,7 @@ export default function PortalPage() {
       const msg = await HttpUtil.post<{ balanceCents: number }>(
         '/portal/api/wallet/redeem',
         { code: parsed.data.code },
-        { silent: true },
+        JSON_POST_OPTIONS,
       );
       if (msg.success) {
         messageApi.success(t('portal.redeemSuccess'));
@@ -195,7 +200,7 @@ export default function PortalPage() {
       const msg = await HttpUtil.post<{ expiryTime: number; balanceCents: number }>(
         '/portal/api/billing/renew',
         { months: selectedMonths },
-        { silent: true },
+        JSON_POST_OPTIONS,
       );
       if (msg.success) {
         messageApi.success(t('portal.renewSuccess'));
@@ -210,7 +215,7 @@ export default function PortalPage() {
   }, [selectedMonths, messageApi, t, refresh]);
 
   const onLogout = useCallback(async () => {
-    await HttpUtil.post('/portal/api/auth/logout', {}, { silent: true });
+    await HttpUtil.post('/portal/api/auth/logout', {}, JSON_POST_OPTIONS);
     setMe(null);
     setNodes([]);
     setSubs(null);

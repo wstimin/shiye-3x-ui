@@ -117,6 +117,11 @@ const emptyBilling: BillingValues = {
   portalPublicUrl: '',
 };
 
+const JSON_POST_OPTIONS = {
+  silent: true,
+  headers: { 'Content-Type': 'application/json' },
+} as const;
+
 const money = (cents: number) => `¥ ${(cents / 100).toFixed(2)}`;
 const centsToYuan = (cents: number) => Number((cents / 100).toFixed(2));
 const yuanToCents = (yuan: number) => Math.round(Number(yuan) * 100);
@@ -220,7 +225,7 @@ export default function PortalManagementPage() {
       const result = await HttpUtil.post<{ restartScheduled: boolean }>(
         '/panel/api/portal/billing',
         payload,
-        { silent: true },
+        JSON_POST_OPTIONS,
       );
       if (!result.success) throw new Error(result.msg || '保存失败');
       setBilling(payload);
@@ -242,7 +247,7 @@ export default function PortalManagementPage() {
     const endpoint = editingCustomer
       ? `/panel/api/portal/customers/${encodeURIComponent(editingCustomer.username)}`
       : '/panel/api/portal/customers';
-    const result = await HttpUtil.post(endpoint, payload, { silent: true });
+    const result = await HttpUtil.post(endpoint, payload, JSON_POST_OPTIONS);
     if (!result.success) {
       messageApi.error(result.msg || '保存客户失败');
       return;
@@ -280,7 +285,7 @@ export default function PortalManagementPage() {
     const result = await HttpUtil.post(
       `/panel/api/portal/customers/${encodeURIComponent(row.username)}`,
       { enable },
-      { silent: true },
+      JSON_POST_OPTIONS,
     );
     if (!result.success) messageApi.error(result.msg || '更新客户状态失败');
     else await load();
@@ -295,7 +300,7 @@ export default function PortalManagementPage() {
         const result = await HttpUtil.post(
           `/panel/api/portal/customers/${encodeURIComponent(row.username)}/delete`,
           {},
-          { silent: true },
+          JSON_POST_OPTIONS,
         );
         if (!result.success) throw new Error(result.msg || '删除失败');
         messageApi.success('客户账号已删除');
@@ -312,7 +317,7 @@ export default function PortalManagementPage() {
         ...rest,
         amountCents: yuanToCents(amountYuan),
       },
-      { silent: true },
+      JSON_POST_OPTIONS,
     );
     if (!result.success || !result.obj) {
       messageApi.error(result.msg || '生成卡密失败');
@@ -327,7 +332,7 @@ export default function PortalManagementPage() {
     const result = await HttpUtil.post(
       `/panel/api/portal/coupons/${row.id}/disable`,
       {},
-      { silent: true },
+      JSON_POST_OPTIONS,
     );
     if (!result.success) messageApi.error(result.msg || '作废失败');
     else await load();

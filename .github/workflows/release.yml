@@ -103,10 +103,13 @@ jobs:
           export CC=$(realpath "$(find "$TOOLCHAIN_DIR/bin" -name '*-gcc.br_real' -type f -executable | head -n1)")
           [ -z "$CC" ] && { echo "No gcc.br_real found in $TOOLCHAIN_DIR/bin" >&2; exit 1; }
           cd -
-          # Stamp the commit into per-commit (dev channel) builds only; tagged
-          # stable releases stay unstamped so config.IsDevBuild() returns false.
+          # Stable builds receive the tag version; per-commit dev builds receive
+          # a commit identity so config.IsDevBuild() can distinguish the channel.
           LDFLAGS="-w -s -linkmode external -extldflags '-static'"
-          if [[ "$GITHUB_REF" != refs/tags/* ]]; then
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            RELEASE_VERSION="${GITHUB_REF_NAME#v}"
+            LDFLAGS="$LDFLAGS -X github.com/wstimin/shiye-3x-ui/v3/internal/config.version=$RELEASE_VERSION"
+          else
             LDFLAGS="$LDFLAGS -X github.com/wstimin/shiye-3x-ui/v3/internal/config.buildCommit=${GITHUB_SHA::8} -X github.com/wstimin/shiye-3x-ui/v3/internal/config.buildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           fi
           go build -buildvcs=true -ldflags "$LDFLAGS" -o xui-release -v .
@@ -292,9 +295,12 @@ jobs:
           go version
           gcc --version
 
-          # Stamp the commit into per-commit (dev channel) builds only.
+          # Stamp either the stable tag version or the dev commit identity.
           LDFLAGS="-w -s"
-          if [[ "$GITHUB_REF" != refs/tags/* ]]; then
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            RELEASE_VERSION="${GITHUB_REF_NAME#v}"
+            LDFLAGS="$LDFLAGS -X github.com/wstimin/shiye-3x-ui/v3/internal/config.version=$RELEASE_VERSION"
+          else
             LDFLAGS="$LDFLAGS -X github.com/wstimin/shiye-3x-ui/v3/internal/config.buildCommit=${GITHUB_SHA:0:8} -X github.com/wstimin/shiye-3x-ui/v3/internal/config.buildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           fi
           go build -buildvcs=true -ldflags "$LDFLAGS" -o xui-release.exe -v .
