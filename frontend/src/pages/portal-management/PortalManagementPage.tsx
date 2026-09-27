@@ -905,7 +905,9 @@ export default function PortalManagementPage() {
                       />
                     </Form.Item>
                     <Button
-                      className={index === 0 ? 'portal-binding-remove has-label' : 'portal-binding-remove'}
+                      className={
+                        index === 0 ? 'portal-binding-remove has-label' : 'portal-binding-remove'
+                      }
                       type="text"
                       danger
                       icon={<DeleteOutlined />}

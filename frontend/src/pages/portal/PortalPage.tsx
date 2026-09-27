@@ -315,7 +315,10 @@ export default function PortalPage() {
     (sum, binding) => sum + (binding.traffic?.up ?? 0) + (binding.traffic?.down ?? 0),
     0,
   );
-  const totalQuota = portalBindings.reduce((sum, binding) => sum + (binding.traffic?.total ?? 0), 0);
+  const totalQuota = portalBindings.reduce(
+    (sum, binding) => sum + (binding.traffic?.total ?? 0),
+    0,
+  );
   const runningNodes = nodes.filter((node) => node.enable).length;
   const finiteExpiries = portalBindings
     .map((binding) => binding.expiryTime)

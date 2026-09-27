@@ -59,6 +59,7 @@ func migrationModels() []any {
 		&model.OutboundSubscription{},
 		&model.SubBalancer{},
 		&model.CustomerAccount{},
+		&model.CustomerBinding{},
 		&model.CouponCode{},
 		&model.WalletTxn{},
 	}

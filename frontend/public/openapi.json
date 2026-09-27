@@ -4395,7 +4395,7 @@
     },
     {
       "name": "Customer Portal",
-      "description": "Customer self-service portal: admin-managed logins bound to client emails, pure-amount recharge codes, and balance-charged renewal. Logins are per-client username+password pairs; codes carry only an amount and redeem into balance. Portal sessions use a separate cookie from the admin session."
+      "description": "Customer self-service portal: admin-managed logins with one or more priced client bindings, pure-amount recharge codes, and balance-charged renewal. Codes carry only an amount and redeem into balance. Portal sessions use a separate cookie from the admin session."
     },
     {
       "name": "Nodes",
@@ -10318,7 +10318,7 @@
         "tags": [
           "Customer Portal"
         ],
-        "summary": "List portal logins newest first. Responses carry username, bound client email, balance, per-customer monthly price and enable flag — never password hashes.",
+        "summary": "List portal logins newest first. Responses include every client binding and its own monthly price — never password hashes.",
         "operationId": "get_panel_api_portal_customers",
         "responses": {
           "200": {
@@ -10342,10 +10342,14 @@
                   "obj": [
                     {
                       "username": "alice",
-                      "email": "alice@example.com",
                       "balanceCents": 500,
-                      "monthlyPriceCents": 2000,
-                      "enable": true
+                      "enable": true,
+                      "bindings": [
+                        {
+                          "email": "alice@example.com",
+                          "monthlyPriceCents": 2000
+                        }
+                      ]
                     }
                   ]
                 }
@@ -10358,7 +10362,7 @@
         "tags": [
           "Customer Portal"
         ],
-        "summary": "Bind a portal login and its own monthly price to an existing unbound client email. The username must be unique.",
+        "summary": "Create a portal login with one or more existing unbound clients. Each binding has its own monthly price.",
         "operationId": "post_panel_api_portal_customers",
         "requestBody": {
           "required": true,
@@ -10370,8 +10374,16 @@
               "example": {
                 "username": "alice",
                 "password": "s3cret",
-                "email": "alice@example.com",
-                "monthlyPriceCents": 2000
+                "bindings": [
+                  {
+                    "email": "alice@example.com",
+                    "monthlyPriceCents": 2000
+                  },
+                  {
+                    "email": "alice-mobile@example.com",
+                    "monthlyPriceCents": 1200
+                  }
+                ]
               }
             }
           }
@@ -10397,9 +10409,13 @@
                   "success": true,
                   "obj": {
                     "username": "alice",
-                    "email": "alice@example.com",
-                    "monthlyPriceCents": 2000,
-                    "enable": true
+                    "enable": true,
+                    "bindings": [
+                      {
+                        "email": "alice@example.com",
+                        "monthlyPriceCents": 2000
+                      }
+                    ]
                   }
                 }
               }
@@ -10413,7 +10429,7 @@
         "tags": [
           "Customer Portal"
         ],
-        "summary": "Update the bound client, per-customer monthly price, password and/or enable switch. A password change bumps the login epoch so live portal sessions drop.",
+        "summary": "Replace the priced client bindings and/or update password and enable state. A password change bumps the login epoch so live portal sessions drop.",
         "operationId": "post_panel_api_portal_customers_username",
         "parameters": [
           {
@@ -10434,8 +10450,12 @@
                 "type": "object"
               },
               "example": {
-                "email": "alice@example.com",
-                "monthlyPriceCents": 2500,
+                "bindings": [
+                  {
+                    "email": "alice@example.com",
+                    "monthlyPriceCents": 2500
+                  }
+                ],
                 "password": "new-secret",
                 "enable": true
               }
