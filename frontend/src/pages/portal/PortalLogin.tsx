@@ -16,6 +16,7 @@ import {
   LockOutlined,
   MoonFilled,
   MoonOutlined,
+  SafetyCertificateFilled,
   SunOutlined,
   TranslationOutlined,
   UserOutlined,
@@ -145,10 +146,16 @@ export default function PortalLogin({ plans, onDone }: PortalLoginProps) {
           <div className="portal-wrapper">
             <div className="portal-card">
               <div className="brand">
-                <span className="brand-name">{title}</span>
+                <div className="brand-title-row">
+                  <span className="brand-symbol" aria-hidden="true">
+                    <SafetyCertificateFilled />
+                  </span>
+                  <span className="brand-name">{title}</span>
+                </div>
                 <span className="brand-accent" aria-hidden="true" />
               </div>
               <h2 className="welcome">{t('portal.welcome')}</h2>
+              <p className="portal-login-subtitle">登录后管理您的订阅、节点与账户余额</p>
 
               <FormProvider {...methods}>
                 <Form

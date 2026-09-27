@@ -32,6 +32,7 @@ import {
   PlusOutlined,
   ReloadOutlined,
   SafetyCertificateOutlined,
+  SearchOutlined,
   WalletOutlined,
 } from '@ant-design/icons';
 
@@ -169,6 +170,7 @@ export default function PortalManagementPage() {
   const [savingBilling, setSavingBilling] = useState(false);
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<CustomerRow | null>(null);
+  const [customerSearch, setCustomerSearch] = useState('');
   const [customerForm] = Form.useForm<CustomerFormValues>();
   const [billingForm] = Form.useForm<BillingFormValues>();
   const [providerForm] = Form.useForm<ProviderFormValues>();
@@ -405,36 +407,71 @@ export default function PortalManagementPage() {
       }),
     [boundByEmail, clientEmails, editingCustomer?.username],
   );
+  const filteredCustomers = useMemo(() => {
+    const keyword = customerSearch.trim().toLowerCase();
+    if (!keyword) return customers;
+    return customers.filter((customer) => {
+      const bindings = customer.bindings?.length
+        ? customer.bindings
+        : [{ email: customer.email, monthlyPriceCents: customer.monthlyPriceCents }];
+      return (
+        customer.username.toLowerCase().includes(keyword) ||
+        bindings.some((binding) => binding.email.toLowerCase().includes(keyword))
+      );
+    });
+  }, [customerSearch, customers]);
 
   const customerColumns: TableProps<CustomerRow>['columns'] = [
-    { title: '登录用户', dataIndex: 'username', key: 'username' },
+    {
+      title: '客户账号',
+      dataIndex: 'username',
+      key: 'username',
+      width: 190,
+      render: (username: string, row) => (
+        <div className="portal-customer-identity">
+          <span>{username.slice(0, 1).toUpperCase()}</span>
+          <div>
+            <strong>{username}</strong>
+            <small>{row.bindings?.length || (row.email ? 1 : 0)} 个客户端</small>
+          </div>
+        </div>
+      ),
+    },
     {
       title: '绑定客户端',
       key: 'bindings',
       render: (_, row) => (
-        <Space direction="vertical" size={5}>
+        <div className="portal-binding-summary">
           {(row.bindings?.length
             ? row.bindings
             : [{ email: row.email, monthlyPriceCents: row.monthlyPriceCents }]
           ).map((binding) => (
-            <Space key={binding.email} size={6} wrap>
+            <span className="portal-binding-chip" key={binding.email}>
               <Typography.Text copyable>{binding.email}</Typography.Text>
-              <Tag color="blue">{money(binding.monthlyPriceCents)} / 月</Tag>
-            </Space>
+              <b>{money(binding.monthlyPriceCents)}/月</b>
+            </span>
           ))}
-        </Space>
+        </div>
       ),
     },
-    { title: '余额', dataIndex: 'balanceCents', key: 'balance', render: (v: number) => money(v) },
+    {
+      title: '余额',
+      dataIndex: 'balanceCents',
+      key: 'balance',
+      width: 120,
+      render: (v: number) => <strong className="portal-balance-value">{money(v)}</strong>,
+    },
     {
       title: '状态',
       dataIndex: 'enable',
       key: 'enable',
+      width: 88,
       render: (v: boolean) => <Tag color={v ? 'green' : 'default'}>{v ? '启用' : '停用'}</Tag>,
     },
     {
       title: '操作',
       key: 'actions',
+      width: 210,
       render: (_, row) => (
         <Space>
           <Button type="text" icon={<EditOutlined />} onClick={() => openEditCustomer(row)}>
@@ -672,14 +709,34 @@ export default function PortalManagementPage() {
                         message="一个账号可以绑定多个现有客户端，每个客户端都能单独设置月费价格。"
                         style={{ marginBottom: 16 }}
                       />
+                      <div className="portal-customer-toolbar">
+                        <Input
+                          allowClear
+                          prefix={<SearchOutlined />}
+                          value={customerSearch}
+                          placeholder="搜索客户账号或绑定客户端"
+                          onChange={(event) => setCustomerSearch(event.target.value)}
+                        />
+                        <Typography.Text type="secondary">
+                          共 {customers.length} 位客户
+                          {customerSearch && `，找到 ${filteredCustomers.length} 条`}
+                        </Typography.Text>
+                      </div>
                       <Table
+                        className="portal-customer-table"
                         rowKey="username"
-                        size={isMobile ? 'small' : 'middle'}
+                        size="small"
                         loading={loading}
                         columns={customerColumns}
-                        dataSource={customers}
+                        dataSource={filteredCustomers}
                         scroll={{ x: 860 }}
-                        pagination={{ pageSize: 8 }}
+                        pagination={{
+                          defaultPageSize: 12,
+                          showSizeChanger: true,
+                          pageSizeOptions: [12, 24, 48],
+                          showTotal: (total, range) => `${range[0]}-${range[1]} / 共 ${total} 位`,
+                          size: isMobile ? 'small' : undefined,
+                        }}
                       />
                     </Card>
                   ),
@@ -821,6 +878,7 @@ export default function PortalManagementPage() {
         </Layout>
       </Layout>
       <Modal
+        rootClassName="portal-customer-modal"
         title={editingCustomer ? `编辑客户：${editingCustomer.username}` : '创建客户账号'}
         open={customerModalOpen}
         destroyOnHidden

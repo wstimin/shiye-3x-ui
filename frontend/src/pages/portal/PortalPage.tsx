@@ -24,9 +24,10 @@ import {
   CalendarOutlined,
   CheckCircleFilled,
   ClockCircleOutlined,
+  CloudServerOutlined,
   CopyOutlined,
+  CreditCardOutlined,
   DownloadOutlined,
-  GiftOutlined,
   GlobalOutlined,
   HomeOutlined,
   LinkOutlined,
@@ -34,8 +35,9 @@ import {
   QrcodeOutlined,
   ReloadOutlined,
   RightOutlined,
-  SafetyCertificateOutlined,
-  ThunderboltFilled,
+  RocketOutlined,
+  SafetyCertificateFilled,
+  ShoppingCartOutlined,
   UnorderedListOutlined,
   UserOutlined,
   WalletOutlined,
@@ -488,11 +490,11 @@ export default function PortalPage() {
     {
       key: 'nodes' as const,
       label: '我的节点',
-      icon: <ThunderboltFilled />,
+      icon: <CloudServerOutlined />,
       count: nodes.length,
     },
-    { key: 'wallet' as const, label: '余额与续期', icon: <WalletOutlined /> },
-    { key: 'account' as const, label: '账户设置', icon: <SafetyCertificateOutlined /> },
+    { key: 'wallet' as const, label: '余额与续期', icon: <CreditCardOutlined /> },
+    { key: 'account' as const, label: '账户设置', icon: <UserOutlined /> },
   ];
 
   const nodeRows = (visibleNodes: PortalNode[]) =>
@@ -575,7 +577,9 @@ export default function PortalPage() {
       <Layout className={pageClass} dir={direction}>
         <aside className="portal-sidebar" aria-label={`${siteTitle}导航`}>
           <div className="sidebar-brand">
-            <span className="sidebar-logo">X</span>
+            <span className="sidebar-logo" aria-hidden="true">
+              <SafetyCertificateFilled />
+            </span>
             <span className="sidebar-brand-copy">
               <strong>{siteTitle}</strong>
               <small>客户服务中心</small>
@@ -604,7 +608,7 @@ export default function PortalPage() {
               rel="noopener noreferrer"
             >
               <span className="sidebar-purchase-icon">
-                <GiftOutlined />
+                <ShoppingCartOutlined />
               </span>
               <span>
                 <strong>购买卡密</strong>
@@ -709,7 +713,7 @@ export default function PortalPage() {
                       <span className="portal-orbit portal-orbit-one" />
                       <span className="portal-orbit portal-orbit-two" />
                       <span className="portal-hero-core">
-                        <ThunderboltFilled />
+                        <RocketOutlined />
                       </span>
                       <span className="portal-hero-node portal-hero-node-one" />
                       <span className="portal-hero-node portal-hero-node-two" />
@@ -786,7 +790,7 @@ export default function PortalPage() {
                         </button>
                         <button type="button" onClick={() => switchSection('wallet')}>
                           <span className="is-violet">
-                            <GiftOutlined />
+                            <CreditCardOutlined />
                           </span>
                           <b>卡密充值</b>
                           <small>兑换卡密到账户余额</small>
@@ -847,7 +851,7 @@ export default function PortalPage() {
                 <>
                   <section className="portal-wallet-hero">
                     <div className="portal-wallet-icon">
-                      <WalletOutlined />
+                      <CreditCardOutlined />
                     </div>
                     <div>
                       <span>账户可用余额</span>
@@ -898,7 +902,7 @@ export default function PortalPage() {
                           rel="noopener noreferrer"
                         >
                           <span className="portal-purchase-icon">
-                            <GiftOutlined />
+                            <ShoppingCartOutlined />
                           </span>
                           <span className="portal-purchase-copy">
                             <strong>还没有卡密？</strong>
