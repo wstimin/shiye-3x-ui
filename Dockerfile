@@ -15,6 +15,7 @@ RUN npm run build
 FROM golang:1.27-alpine AS builder
 WORKDIR /app
 ARG TARGETARCH
+ARG TARGETVARIANT
 ARG RELEASE_VERSION
 
 RUN apk --no-cache --update add \
@@ -33,7 +34,7 @@ RUN VERSION_LDFLAG=""; \
     VERSION_LDFLAG="-X github.com/wstimin/shiye-3x-ui/v3/internal/config.version=${RELEASE_VERSION#v}"; \
   fi; \
   go build -ldflags "-w -s $VERSION_LDFLAG" -o build/x-ui main.go
-RUN ./DockerInit.sh "$TARGETARCH"
+RUN ./DockerInit.sh "$TARGETARCH" "$TARGETVARIANT"
 
 # ========================================================
 # Stage: Final Image of ShiYe 3X-UI

@@ -5,7 +5,7 @@ case $1 in
         ARCH="64"
         FNAME="amd64"
         ;;
-    i386)
+    386 | i386)
         ARCH="32"
         FNAME="i386"
         ;;
@@ -13,7 +13,16 @@ case $1 in
         ARCH="arm64-v8a"
         FNAME="arm64"
         ;;
-    armv7 | arm | arm32)
+    arm)
+        if [ "$2" = "v6" ]; then
+            ARCH="arm32-v6a"
+            FNAME="armv6"
+        else
+            ARCH="arm32-v7a"
+            FNAME="arm32"
+        fi
+        ;;
+    armv7 | arm32)
         ARCH="arm32-v7a"
         FNAME="arm32"
         ;;
@@ -26,7 +35,13 @@ case $1 in
         FNAME="amd64"
         ;;
 esac
-MTG_MULTI_VER=$(curl -sfL "https://api.github.com/repos/mhsanaei/mtg-multi/releases/latest" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1)
+# Resolve the tag through the public release redirect. The GitHub API can
+# intermittently return an empty response during parallel multi-arch builds,
+# while the release page and asset downloads remain available.
+MTG_MULTI_VER=$(curl -sf --retry 5 --retry-all-errors --retry-delay 3 \
+    -o /dev/null -w '%{redirect_url}' \
+    "https://github.com/mhsanaei/mtg-multi/releases/latest" \
+    | sed -n 's#.*/releases/tag/##p')
 if [ -z "$MTG_MULTI_VER" ]; then
     echo "DockerInit: could not resolve the latest mtg-multi release tag" >&2
     exit 1
@@ -45,7 +60,8 @@ case $FNAME in
     *) MTGARCH="$FNAME" ;;
 esac
 MTG_PKG="mtg-multi-${MTG_MULTI_VER#v}-linux-${MTGARCH}"
-curl -sfLRO "https://github.com/mhsanaei/mtg-multi/releases/download/${MTG_MULTI_VER}/${MTG_PKG}.tar.gz"
+curl -sfLRO --retry 5 --retry-all-errors --retry-delay 3 \
+    "https://github.com/mhsanaei/mtg-multi/releases/download/${MTG_MULTI_VER}/${MTG_PKG}.tar.gz"
 tar -xzf "${MTG_PKG}.tar.gz"
 mv "${MTG_PKG}/mtg-multi" "mtg-linux-${FNAME}"
 rm -rf "${MTG_PKG}" "${MTG_PKG}.tar.gz"
