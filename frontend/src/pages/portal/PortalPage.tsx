@@ -3,45 +3,49 @@ import { useTranslation } from 'react-i18next';
 import {
   Avatar,
   Button,
-  Card,
   ConfigProvider,
   Empty,
   Input,
   InputNumber,
   Layout,
   Modal,
-  Segmented,
-  Statistic,
+  Progress,
+  Select,
   Tabs,
   Tag,
   message,
 } from 'antd';
 import type { TabsProps } from 'antd';
 import {
+  ApiOutlined,
+  ArrowDownOutlined,
+  ArrowUpOutlined,
+  CalendarOutlined,
+  CheckCircleFilled,
   ClockCircleOutlined,
   CopyOutlined,
-  CustomerServiceOutlined,
   DownloadOutlined,
+  GiftOutlined,
+  GlobalOutlined,
   HomeOutlined,
   LinkOutlined,
+  LogoutOutlined,
   QrcodeOutlined,
   ReloadOutlined,
   RightOutlined,
   SafetyCertificateOutlined,
-  SettingOutlined,
   ThunderboltFilled,
   UnorderedListOutlined,
   UserOutlined,
   WalletOutlined,
 } from '@ant-design/icons';
 
-import { ClipboardManager, HttpUtil, IntlUtil, LanguageManager } from '@/utils';
+import { ClipboardManager, HttpUtil, IntlUtil, LanguageManager, SizeFormatter } from '@/utils';
 import { setMessageInstance } from '@/utils/messageBus';
-import { buildAntdThemeConfig, useTheme } from '@/hooks/useTheme';
+import { buildAntdThemeConfig } from '@/hooks/useTheme';
 import SubAppsTab from '../sub/SubAppsTab';
 import SubConfigsTab from '../sub/SubConfigsTab';
-import { buildSubApps, detectPlatform, resolveSubStatus } from '../sub/subPageModel';
-import SubHero from '../sub/SubHero';
+import { buildSubApps, detectPlatform, usagePercent } from '../sub/subPageModel';
 import {
   formatCents,
   planCostCents,
@@ -57,18 +61,10 @@ import './PortalPage.css';
 import '../sub/SubPage.css';
 
 const ACCENT = {
-  light: {
-    primary: '#1677ff',
-    hover: '#4096ff',
-    active: '#0958d9',
-    rail: 'rgba(22, 119, 255, 0.16)',
-  },
-  dark: {
-    primary: '#4998ff',
-    hover: '#6cb0ff',
-    active: '#2378e5',
-    rail: 'rgba(73, 152, 255, 0.18)',
-  },
+  primary: '#2563eb',
+  hover: '#3b76ef',
+  active: '#1d4ed8',
+  rail: 'rgba(37, 99, 235, 0.14)',
 };
 
 const JSON_POST_OPTIONS = {
@@ -85,10 +81,10 @@ interface RenewState {
 type PortalSection = 'overview' | 'nodes' | 'wallet' | 'account';
 
 const PORTAL_SECTION_COPY: Record<PortalSection, { kicker: string; title: string }> = {
-  overview: { kicker: '客户中心 / 概览', title: '账户总览' },
-  nodes: { kicker: '客户中心 / 我的节点', title: '节点与订阅' },
-  wallet: { kicker: '客户中心 / 余额与续期', title: '余额与续期' },
-  account: { kicker: '客户中心 / 账户设置', title: '账户设置' },
+  overview: { kicker: '工作台', title: '账户总览' },
+  nodes: { kicker: '服务管理', title: '节点与订阅' },
+  wallet: { kicker: '财务中心', title: '余额与续期' },
+  account: { kicker: '个人中心', title: '账户设置' },
 };
 
 async function fetchMe(silent = true): Promise<PortalMe | null> {
@@ -108,7 +104,6 @@ async function fetchMe(silent = true): Promise<PortalMe | null> {
 
 export default function PortalPage() {
   const { t } = useTranslation();
-  const { isDark, antdThemeConfig } = useTheme();
   const [messageApi, messageContextHolder] = message.useMessage();
   useEffect(() => {
     setMessageInstance(messageApi);
@@ -249,27 +244,33 @@ export default function PortalPage() {
   }, []);
 
   const themeConfig = useMemo(() => {
-    const accent = isDark ? ACCENT.dark : ACCENT.light;
+    const baseTheme = buildAntdThemeConfig(false, false);
     const primary = {
-      colorPrimary: accent.primary,
-      colorPrimaryHover: accent.hover,
-      colorPrimaryActive: accent.active,
+      colorPrimary: ACCENT.primary,
+      colorPrimaryHover: ACCENT.hover,
+      colorPrimaryActive: ACCENT.active,
     };
     return {
-      ...buildAntdThemeConfig(false, false),
+      ...baseTheme,
       token: {
-        ...antdThemeConfig.token,
+        ...baseTheme.token,
         ...primary,
-        colorLink: accent.primary,
-        colorInfo: accent.primary,
+        colorBgBase: '#ffffff',
+        colorBgContainer: '#ffffff',
+        colorBgElevated: '#ffffff',
+        colorBorder: '#dfe8f3',
+        colorText: '#14213a',
+        colorTextSecondary: '#718096',
+        colorLink: ACCENT.primary,
+        colorInfo: ACCENT.primary,
       },
       components: {
-        ...antdThemeConfig.components,
-        Button: { ...antdThemeConfig.components?.Button, ...primary },
-        Progress: { ...antdThemeConfig.components?.Progress, remainingColor: accent.rail },
+        ...baseTheme.components,
+        Button: { ...baseTheme.components?.Button, ...primary },
+        Progress: { ...baseTheme.components?.Progress, remainingColor: ACCENT.rail },
       },
     };
-  }, [antdThemeConfig, isDark]);
+  }, []);
 
   const direction = lang === 'fa-IR' || lang === 'ar-EG' ? 'rtl' : 'ltr';
   // The customer portal is intentionally a bright, branded surface. Keep
@@ -287,26 +288,9 @@ export default function PortalPage() {
   const totalQuota = me?.traffic?.total ?? 0;
   const runningNodes = nodes.filter((node) => node.enable).length;
   const expireMs = me?.expiryTime ?? 0;
-  const heroData = useMemo(
-    () => ({
-      status: resolveSubStatus(
-        { enabled: true, usedByte: totalUsed, totalByte: totalQuota, expireMs },
-        nowMs,
-      ),
-      daysLeft: expireMs > 0 ? Math.max(0, Math.ceil((expireMs - nowMs) / 86_400_000)) : null,
-      usedByte: totalUsed,
-      totalByte: totalQuota,
-      expireMs,
-      lastOnlineMs: 0,
-      download: '',
-      upload: '',
-      used: '',
-      total: totalQuota > 0 ? '' : '∞',
-      remained: '',
-      datepicker: 'gregorian' as const,
-    }),
-    [totalUsed, totalQuota, expireMs, nowMs],
-  );
+  const daysLeft = expireMs > 0 ? Math.max(0, Math.ceil((expireMs - nowMs) / 86_400_000)) : null;
+  const trafficPercent = usagePercent(totalUsed, totalQuota);
+  const remainingTraffic = totalQuota > 0 ? Math.max(0, totalQuota - totalUsed) : 0;
 
   const apps = useMemo(
     () =>
@@ -450,7 +434,7 @@ export default function PortalPage() {
     visibleNodes.map((n) => (
       <div key={`${n.protocol}-${n.remark}`} className="portal-node-row">
         <span className="portal-node-icon">
-          <ThunderboltFilled />
+          <ApiOutlined />
         </span>
         <div className="portal-node-main">
           <span className="portal-node-remark" dir="auto">
@@ -469,27 +453,54 @@ export default function PortalPage() {
       </div>
     ));
 
-  const balanceCards = (
-    <div className="portal-balance-row">
-      <Card size="small" className="portal-balance-card">
-        <Statistic
-          title={t('portal.balance')}
-          value={formatCents(balance)}
-          prefix={<WalletOutlined />}
-        />
-      </Card>
-      <Card size="small" className="portal-balance-card">
-        <Statistic
-          title={t('subscription.expiry')}
-          value={
-            expireMs > 0
-              ? IntlUtil.formatDate(expireMs, 'gregorian', lang)
-              : t('subscription.noExpiry')
-          }
-        />
-      </Card>
-    </div>
-  );
+  const versionLabel = window.X_UI_CUR_VER ? `v${window.X_UI_CUR_VER}` : '';
+  const languageOptions = LanguageManager.supportedLanguages.map((item) => ({
+    value: item.value,
+    label: (
+      <span className="portal-language-option">
+        <span>{item.icon}</span>
+        <span>{item.name}</span>
+      </span>
+    ),
+  }));
+
+  const metrics = [
+    {
+      key: 'balance',
+      label: '账户余额',
+      value: formatCents(balance),
+      hint: '可用于节点续期',
+      icon: <WalletOutlined />,
+      tone: 'blue',
+    },
+    {
+      key: 'expiry',
+      label: '剩余时间',
+      value: daysLeft === null ? '长期有效' : `${daysLeft} 天`,
+      hint:
+        expireMs > 0
+          ? `到期 ${IntlUtil.formatDate(expireMs, 'gregorian', lang)}`
+          : '当前账户无到期限制',
+      icon: <CalendarOutlined />,
+      tone: 'violet',
+    },
+    {
+      key: 'traffic',
+      label: '本期已用',
+      value: SizeFormatter.sizeFormat(totalUsed),
+      hint: totalQuota > 0 ? `共 ${SizeFormatter.sizeFormat(totalQuota)}` : '不限流量',
+      icon: <ArrowUpOutlined />,
+      tone: 'cyan',
+    },
+    {
+      key: 'nodes',
+      label: '可用节点',
+      value: `${runningNodes} / ${nodes.length}`,
+      hint: runningNodes === nodes.length ? '全部运行正常' : '部分节点不可用',
+      icon: <GlobalOutlined />,
+      tone: 'green',
+    },
+  ];
 
   return (
     <ConfigProvider theme={themeConfig} direction={direction}>
@@ -498,7 +509,10 @@ export default function PortalPage() {
         <aside className="portal-sidebar" aria-label={`${siteTitle}导航`}>
           <div className="sidebar-brand">
             <span className="sidebar-logo">X</span>
-            <span>{siteTitle}</span>
+            <span className="sidebar-brand-copy">
+              <strong>{siteTitle}</strong>
+              <small>客户服务中心</small>
+            </span>
           </div>
           <nav className="sidebar-nav">
             {navItems.map((item) => (
@@ -515,35 +529,63 @@ export default function PortalPage() {
               </button>
             ))}
           </nav>
-          <div className="sidebar-help">
-            <div className="sidebar-help-icon">
-              <CustomerServiceOutlined />
-            </div>
-            <strong>需要帮助？</strong>
-            <span>联系客服获取支持</span>
-            <a href={plans?.purchaseUrl || '#'} target="_blank" rel="noopener noreferrer">
-              联系支持 →
+          {plans?.purchaseUrl && (
+            <a
+              className="sidebar-purchase"
+              href={plans.purchaseUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <span className="sidebar-purchase-icon">
+                <GiftOutlined />
+              </span>
+              <span>
+                <strong>购买卡密</strong>
+                <small>前往商城充值余额</small>
+              </span>
+              <RightOutlined />
             </a>
-          </div>
-          <div className="sidebar-version">X Center · v1.0</div>
+          )}
+          <div className="sidebar-version">X Center {versionLabel}</div>
         </aside>
         <Layout className="portal-main">
           <header className="portal-topbar">
-            <div>
-              <span className="portal-kicker">{sectionCopy.kicker}</span>
+            <div className="portal-title-group">
+              <span className="portal-kicker">
+                {siteTitle} <i>/</i> {sectionCopy.kicker}
+              </span>
               <h1>{sectionCopy.title}</h1>
             </div>
-            <div className="portal-topbar-user">
-              <Avatar size={40} icon={<UserOutlined />} />
-              <div>
-                <b>{me.username}</b>
-                <span>账户正常</span>
-              </div>
-              <Button
-                type="text"
-                icon={<SettingOutlined />}
-                aria-label="账户设置"
+            <div className="portal-topbar-actions">
+              <Select
+                className="portal-language-select"
+                value={lang}
+                onChange={onLangChange}
+                options={languageOptions}
+                suffixIcon={<GlobalOutlined />}
+                popupMatchSelectWidth={180}
+                aria-label="选择语言"
+              />
+              <button
+                type="button"
+                className="portal-user-chip"
                 onClick={() => switchSection('account')}
+              >
+                <Avatar size={38} icon={<UserOutlined />} />
+                <span>
+                  <b>{me.username}</b>
+                  <small>
+                    <i /> 账户正常
+                  </small>
+                </span>
+              </button>
+              <Button
+                className="portal-logout-button"
+                type="text"
+                icon={<LogoutOutlined />}
+                aria-label={t('logout')}
+                title={t('logout')}
+                onClick={onLogout}
               />
             </div>
           </header>
@@ -562,119 +604,206 @@ export default function PortalPage() {
             ))}
           </nav>
           <Layout.Content className="portal-content-wrap">
-            <Card className="portal-card-main">
-              <header className="portal-header">
-                <div className="portal-brand">
-                  <span className="portal-brand-title" dir="auto">
-                    {siteTitle}
-                  </span>
-                  <div className="portal-brand-id">
-                    <bdi>{me.email}</bdi>
-                  </div>
-                </div>
-                <div className="portal-toolbar">
-                  <Segmented
-                    value={lang}
-                    onChange={(v) => onLangChange(String(v))}
-                    options={LanguageManager.supportedLanguages.map((l) => ({
-                      value: l.value,
-                      label: (
-                        <span title={l.name} aria-label={l.name}>
-                          {l.icon}
-                        </span>
-                      ),
-                    }))}
-                  />
-                  <Button size="small" onClick={onLogout}>
-                    {t('logout')}
-                  </Button>
-                </div>
-              </header>
-              <div key={activeSection} className="portal-view">
-                {activeSection === 'overview' && (
-                  <>
-                    <div className="portal-welcome-strip">
-                      <div>
-                        <span className="portal-welcome-label">欢迎回来</span>
-                        <h2>{me.username}，今天也要保持连接</h2>
-                        <p>你的专属服务运行良好，所有节点都在实时守护。</p>
+            <div key={activeSection} className="portal-view">
+              {activeSection === 'overview' && (
+                <>
+                  <section className="portal-welcome-strip">
+                    <div className="portal-welcome-copy">
+                      <span className="portal-status-pill">
+                        <CheckCircleFilled /> 服务运行正常
+                      </span>
+                      <h2>
+                        欢迎回来，<strong>{me.username}</strong>
+                      </h2>
+                      <p>节点、订阅与账户信息已经为你准备好。</p>
+                      <div className="portal-hero-actions">
+                        <Button
+                          type="primary"
+                          icon={<LinkOutlined />}
+                          onClick={() => switchSection('nodes')}
+                        >
+                          查看订阅
+                        </Button>
+                        <Button
+                          icon={<ClockCircleOutlined />}
+                          onClick={() => setRenew((current) => ({ ...current, open: true }))}
+                        >
+                          余额续期
+                        </Button>
                       </div>
-                      <div className="portal-welcome-orb">
+                    </div>
+                    <div className="portal-hero-visual" aria-hidden="true">
+                      <span className="portal-orbit portal-orbit-one" />
+                      <span className="portal-orbit portal-orbit-two" />
+                      <span className="portal-hero-core">
                         <ThunderboltFilled />
-                      </div>
+                      </span>
+                      <span className="portal-hero-node portal-hero-node-one" />
+                      <span className="portal-hero-node portal-hero-node-two" />
                     </div>
-                    <SubHero {...heroData} lang={lang} />
-                    {balanceCards}
-                    <div className="portal-actions">
-                      <Button
-                        type="primary"
-                        icon={<ClockCircleOutlined />}
-                        onClick={() => setRenew((r) => ({ ...r, open: true }))}
-                      >
-                        {t('portal.renew')}
-                      </Button>
-                      <Button icon={<ReloadOutlined />} onClick={refresh}>
-                        {t('refresh')}
-                      </Button>
-                    </div>
-                    {nodes.length > 0 && (
-                      <section className="portal-section">
-                        <div className="portal-section-heading">
-                          <div>
-                            <span className="portal-section-eyebrow">LIVE CONNECTIONS</span>
-                            <h3>{t('portal.myNodes')}</h3>
-                          </div>
-                          <Button type="link" onClick={() => switchSection('nodes')}>
-                            查看全部 <RightOutlined />
-                          </Button>
-                        </div>
-                        {nodeRows(nodes.slice(0, 3))}
-                      </section>
-                    )}
-                  </>
-                )}
+                  </section>
 
-                {activeSection === 'nodes' && (
-                  <>
-                    <section className="portal-section portal-section-first">
+                  <div className="portal-metric-grid">
+                    {metrics.map((metric) => (
+                      <article key={metric.key} className={`portal-metric-card is-${metric.tone}`}>
+                        <span className="portal-metric-icon">{metric.icon}</span>
+                        <div>
+                          <span className="portal-metric-label">{metric.label}</span>
+                          <strong>{metric.value}</strong>
+                          <small>{metric.hint}</small>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+
+                  <div className="portal-dashboard-grid">
+                    <section className="portal-surface portal-traffic-panel">
                       <div className="portal-section-heading">
                         <div>
-                          <span className="portal-section-eyebrow">LIVE CONNECTIONS</span>
+                          <span className="portal-section-eyebrow">TRAFFIC</span>
+                          <h3>本月流量</h3>
+                        </div>
+                        <strong className="portal-traffic-percent">
+                          {totalQuota > 0 ? `${trafficPercent.toFixed(1)}%` : '不限量'}
+                        </strong>
+                      </div>
+                      <Progress
+                        percent={totalQuota > 0 ? trafficPercent : 100}
+                        showInfo={false}
+                        strokeColor={{ from: '#2563eb', to: '#16b8c8' }}
+                        trailColor="#eaf0f8"
+                      />
+                      <div className="portal-traffic-stats">
+                        <div>
+                          <span>
+                            <ArrowDownOutlined /> 已使用
+                          </span>
+                          <strong>{SizeFormatter.sizeFormat(totalUsed)}</strong>
+                        </div>
+                        <div>
+                          <span>剩余流量</span>
+                          <strong>
+                            {totalQuota > 0 ? SizeFormatter.sizeFormat(remainingTraffic) : '∞'}
+                          </strong>
+                        </div>
+                        <div>
+                          <span>总额度</span>
+                          <strong>
+                            {totalQuota > 0 ? SizeFormatter.sizeFormat(totalQuota) : '不限量'}
+                          </strong>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section className="portal-surface portal-quick-panel">
+                      <div className="portal-section-heading">
+                        <div>
+                          <span className="portal-section-eyebrow">SHORTCUTS</span>
+                          <h3>快捷操作</h3>
+                        </div>
+                      </div>
+                      <div className="portal-quick-actions">
+                        <button type="button" onClick={() => switchSection('nodes')}>
+                          <span className="is-blue">
+                            <QrcodeOutlined />
+                          </span>
+                          <b>导入订阅</b>
+                          <small>复制链接或扫码导入</small>
+                          <RightOutlined />
+                        </button>
+                        <button type="button" onClick={() => switchSection('wallet')}>
+                          <span className="is-violet">
+                            <GiftOutlined />
+                          </span>
+                          <b>卡密充值</b>
+                          <small>兑换卡密到账户余额</small>
+                          <RightOutlined />
+                        </button>
+                      </div>
+                    </section>
+                  </div>
+
+                  {nodes.length > 0 && (
+                    <section className="portal-surface portal-node-section">
+                      <div className="portal-section-heading">
+                        <div>
+                          <span className="portal-section-eyebrow">AVAILABLE NODES</span>
                           <h3>{t('portal.myNodes')}</h3>
                         </div>
-                        <Tag color="green">{runningNodes} 个运行中</Tag>
+                        <Button type="link" onClick={() => switchSection('nodes')}>
+                          查看全部 <RightOutlined />
+                        </Button>
                       </div>
-                      {nodes.length > 0 ? nodeRows(nodes) : <Empty description={t('noData')} />}
+                      {nodeRows(nodes.slice(0, 3))}
                     </section>
-                    {tabs.length > 0 ? (
-                      <Tabs className="portal-tabs" tabBarGutter={24} items={tabs} />
-                    ) : (
-                      <Empty description="当前账号暂无可用订阅" className="portal-empty" />
-                    )}
-                  </>
-                )}
+                  )}
+                </>
+              )}
 
-                {activeSection === 'wallet' && (
-                  <>
-                    {balanceCards}
-                    <div className="portal-actions">
-                      <Button
-                        type="primary"
-                        icon={<ClockCircleOutlined />}
-                        onClick={() => setRenew((r) => ({ ...r, open: true }))}
-                      >
-                        {t('portal.renew')}
-                      </Button>
-                      <Button icon={<ReloadOutlined />} onClick={refresh}>
-                        {t('refresh')}
-                      </Button>
+              {activeSection === 'nodes' && (
+                <>
+                  <section className="portal-surface portal-node-section">
+                    <div className="portal-section-heading">
+                      <div>
+                        <span className="portal-section-eyebrow">AVAILABLE NODES</span>
+                        <h3>{t('portal.myNodes')}</h3>
+                      </div>
+                      <span className="portal-live-badge">
+                        <i /> {runningNodes} 个运行中
+                      </span>
                     </div>
-                    <section className="portal-section">
-                      <h3>{t('portal.recharge')}</h3>
+                    {nodes.length > 0 ? nodeRows(nodes) : <Empty description={t('noData')} />}
+                  </section>
+                  {tabs.length > 0 ? (
+                    <section className="portal-surface portal-subscription-section">
+                      <div className="portal-section-heading">
+                        <div>
+                          <span className="portal-section-eyebrow">SUBSCRIPTION</span>
+                          <h3>订阅与客户端</h3>
+                        </div>
+                      </div>
+                      <Tabs className="portal-tabs" tabBarGutter={24} items={tabs} />
+                    </section>
+                  ) : (
+                    <Empty description="当前账号暂无可用订阅" className="portal-empty" />
+                  )}
+                </>
+              )}
+
+              {activeSection === 'wallet' && (
+                <>
+                  <section className="portal-wallet-hero">
+                    <div className="portal-wallet-icon">
+                      <WalletOutlined />
+                    </div>
+                    <div>
+                      <span>账户可用余额</span>
+                      <strong>{formatCents(balance)}</strong>
+                      <small>余额可直接用于续期已绑定的节点</small>
+                    </div>
+                    <Button
+                      type="primary"
+                      icon={<ClockCircleOutlined />}
+                      onClick={() => setRenew((current) => ({ ...current, open: true }))}
+                    >
+                      立即续期
+                    </Button>
+                  </section>
+                  <div className="portal-wallet-grid">
+                    <section className="portal-surface portal-redeem-panel">
+                      <div className="portal-section-heading">
+                        <div>
+                          <span className="portal-section-eyebrow">REDEEM</span>
+                          <h3>{t('portal.recharge')}</h3>
+                        </div>
+                      </div>
+                      <p className="portal-section-description">
+                        输入有效卡密，金额会立即充值到账户余额。
+                      </p>
                       <div className="portal-recharge-row">
                         <Input
                           value={redeemCode}
-                          onChange={(e) => setRedeemCode(e.target.value)}
+                          onChange={(event) => setRedeemCode(event.target.value)}
                           placeholder={t('portal.codePlaceholder')}
                           onPressEnter={onRedeem}
                         />
@@ -683,83 +812,106 @@ export default function PortalPage() {
                         </Button>
                       </div>
                       {plans?.purchaseUrl && (
-                        <div className="portal-purchase-card">
-                          <div className="portal-purchase-icon">
-                            <CustomerServiceOutlined />
-                          </div>
-                          <div className="portal-purchase-copy">
-                            <strong>购买卡密</strong>
-                            <span>前往购买页面，购买后回到这里输入卡密充值余额</span>
-                          </div>
-                          <a
-                            className="portal-purchase-button"
-                            href={plans.purchaseUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
+                        <a
+                          className="portal-purchase-card"
+                          href={plans.purchaseUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <span className="portal-purchase-icon">
+                            <GiftOutlined />
+                          </span>
+                          <span className="portal-purchase-copy">
+                            <strong>还没有卡密？</strong>
+                            <small>前往购买页面，完成后回到这里兑换</small>
+                          </span>
+                          <span className="portal-purchase-button">
                             立即购买 <RightOutlined />
-                          </a>
-                        </div>
+                          </span>
+                        </a>
                       )}
                     </section>
-                    <section className="portal-section">
-                      <h3>{t('portal.history')}</h3>
-                      {txns.length > 0 ? (
-                        <div className="portal-txns">
-                          {txns.slice(0, 20).map((txn) => (
-                            <div key={txn.id} className="portal-txn-row">
-                              <Tag color={txn.amountCents >= 0 ? 'green' : 'red'}>
-                                {txn.amountCents >= 0 ? '+' : ''}
-                                {formatCents(txn.amountCents)}
-                              </Tag>
-                              <span className="portal-txn-kind">
-                                {t(`portal.txn_${txn.kind}`, txn.kind)}
-                              </span>
-                              <span className="portal-txn-date">
-                                {IntlUtil.formatDate(txn.createdAt, 'gregorian', lang)}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <Empty description="暂无余额流水" className="portal-empty" />
-                      )}
-                    </section>
-                  </>
-                )}
-
-                {activeSection === 'account' && (
-                  <section className="portal-section portal-section-first portal-account-section">
-                    <div className="portal-account-avatar">
-                      <Avatar size={58} icon={<UserOutlined />} />
-                      <div>
-                        <h3>{me.username}</h3>
-                        <span>账户状态正常</span>
+                    <section className="portal-surface portal-expiry-panel">
+                      <span className="portal-section-eyebrow">SERVICE TERM</span>
+                      <h3>当前有效期</h3>
+                      <div className="portal-expiry-value">
+                        <CalendarOutlined />
+                        <strong>
+                          {expireMs > 0
+                            ? IntlUtil.formatDate(expireMs, 'gregorian', lang)
+                            : t('subscription.noExpiry')}
+                        </strong>
                       </div>
-                    </div>
-                    <div className="portal-account-grid">
-                      <div>
-                        <span>登录用户名</span>
-                        <strong>{me.username}</strong>
-                      </div>
-                      <div>
-                        <span>绑定客户端邮箱</span>
-                        <strong>{me.email}</strong>
-                      </div>
-                    </div>
-                    <div className="portal-account-actions">
+                      <span>{daysLeft === null ? '长期有效' : `剩余 ${daysLeft} 天`}</span>
                       <Button icon={<ReloadOutlined />} onClick={refresh}>
-                        刷新账户资料
+                        刷新数据
                       </Button>
-                      <Button danger onClick={onLogout}>
-                        {t('logout')}
-                      </Button>
+                    </section>
+                  </div>
+                  <section className="portal-surface portal-history-section">
+                    <div className="portal-section-heading">
+                      <div>
+                        <span className="portal-section-eyebrow">TRANSACTIONS</span>
+                        <h3>{t('portal.history')}</h3>
+                      </div>
                     </div>
-                    <p className="portal-account-note">登录资料由管理员在客户门户管理中维护。</p>
+                    {txns.length > 0 ? (
+                      <div className="portal-txns">
+                        {txns.slice(0, 20).map((txn) => (
+                          <div key={txn.id} className="portal-txn-row">
+                            <Tag color={txn.amountCents >= 0 ? 'green' : 'red'}>
+                              {txn.amountCents >= 0 ? '+' : ''}
+                              {formatCents(txn.amountCents)}
+                            </Tag>
+                            <span className="portal-txn-kind">
+                              {t(`portal.txn_${txn.kind}`, txn.kind)}
+                            </span>
+                            <span className="portal-txn-date">
+                              {IntlUtil.formatDate(txn.createdAt, 'gregorian', lang)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <Empty description="暂无余额流水" className="portal-empty" />
+                    )}
                   </section>
-                )}
-              </div>
-            </Card>
+                </>
+              )}
+
+              {activeSection === 'account' && (
+                <section className="portal-surface portal-account-section">
+                  <div className="portal-account-avatar">
+                    <Avatar size={58} icon={<UserOutlined />} />
+                    <div>
+                      <h3>{me.username}</h3>
+                      <span className="portal-live-badge">
+                        <i /> 账户状态正常
+                      </span>
+                    </div>
+                  </div>
+                  <div className="portal-account-grid">
+                    <div>
+                      <span>登录用户名</span>
+                      <strong>{me.username}</strong>
+                    </div>
+                    <div>
+                      <span>绑定客户端邮箱</span>
+                      <strong>{me.email}</strong>
+                    </div>
+                  </div>
+                  <div className="portal-account-actions">
+                    <Button icon={<ReloadOutlined />} onClick={refresh}>
+                      刷新账户资料
+                    </Button>
+                    <Button danger icon={<LogoutOutlined />} onClick={onLogout}>
+                      {t('logout')}
+                    </Button>
+                  </div>
+                  <p className="portal-account-note">登录资料由管理员在客户门户管理中维护。</p>
+                </section>
+              )}
+            </div>
           </Layout.Content>
         </Layout>
       </Layout>
