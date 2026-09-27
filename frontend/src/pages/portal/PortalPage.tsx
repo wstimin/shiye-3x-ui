@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Avatar,
@@ -18,18 +18,18 @@ import {
 } from 'antd';
 import type { TabsProps } from 'antd';
 import {
-  ApiOutlined,
   ArrowDownOutlined,
-  ArrowUpOutlined,
+  BarChartOutlined,
   CalendarOutlined,
   CheckCircleFilled,
   ClockCircleOutlined,
   CloudServerOutlined,
   CopyOutlined,
-  CreditCardOutlined,
+  DashboardOutlined,
   DownloadOutlined,
+  GiftOutlined,
   GlobalOutlined,
-  HomeOutlined,
+  IdcardOutlined,
   LinkOutlined,
   LogoutOutlined,
   QrcodeOutlined,
@@ -45,7 +45,6 @@ import {
 
 import { ClipboardManager, HttpUtil, IntlUtil, LanguageManager, SizeFormatter } from '@/utils';
 import { setMessageInstance } from '@/utils/messageBus';
-import { buildAntdThemeConfig } from '@/hooks/useTheme';
 import SubAppsTab from '../sub/SubAppsTab';
 import SubConfigsTab from '../sub/SubConfigsTab';
 import { buildSubApps, detectPlatform, usagePercent } from '../sub/subPageModel';
@@ -60,15 +59,9 @@ import {
   type PortalTxn,
 } from './portalModel';
 import PortalLogin, { PortalLoading } from './PortalLogin';
+import { portalTheme } from './portalTheme';
 import './PortalPage.css';
 import '../sub/SubPage.css';
-
-const ACCENT = {
-  primary: '#2563eb',
-  hover: '#3b76ef',
-  active: '#1d4ed8',
-  rail: 'rgba(37, 99, 235, 0.14)',
-};
 
 const JSON_POST_OPTIONS = {
   silent: true,
@@ -85,10 +78,10 @@ interface RenewState {
 type PortalSection = 'overview' | 'nodes' | 'wallet' | 'account';
 
 const PORTAL_SECTION_COPY: Record<PortalSection, { kicker: string; title: string }> = {
-  overview: { kicker: '工作台', title: '账户总览' },
-  nodes: { kicker: '服务管理', title: '节点与订阅' },
-  wallet: { kicker: '财务中心', title: '余额与续期' },
-  account: { kicker: '个人中心', title: '账户设置' },
+  overview: { kicker: 'portal.sectionOverviewKicker', title: 'portal.sectionOverviewTitle' },
+  nodes: { kicker: 'portal.sectionNodesKicker', title: 'portal.sectionNodesTitle' },
+  wallet: { kicker: 'portal.sectionWalletKicker', title: 'portal.sectionWalletTitle' },
+  account: { kicker: 'portal.sectionAccountKicker', title: 'portal.sectionAccountTitle' },
 };
 
 async function fetchMe(silent = true): Promise<PortalMe | null> {
@@ -119,7 +112,7 @@ export default function PortalPage() {
   const [nodes, setNodes] = useState<PortalNode[]>([]);
   const [subs, setSubs] = useState<PortalSubLinks | null>(null);
   const [txns, setTxns] = useState<PortalTxn[]>([]);
-  const [lang, setLang] = useState<string>(() => LanguageManager.getLanguage('subscription'));
+  const lang = LanguageManager.getLanguage('subscription');
   const [redeemCode, setRedeemCode] = useState('');
   const [redeeming, setRedeeming] = useState(false);
   const [renewing, setRenewing] = useState(false);
@@ -133,37 +126,39 @@ export default function PortalPage() {
   const [qrSubscription, setQrSubscription] = useState<{ title: string; url: string } | null>(null);
   const [activeSection, setActiveSection] = useState<PortalSection>('overview');
 
-  const refresh = useCallback(async () => {
-    const [account, pMsg] = await Promise.all([
-      fetchMe(),
-      HttpUtil.get<PortalPlans>('/portal/api/plans', undefined, { silent: true }),
-    ]);
-    if (pMsg.success && pMsg.obj) setPlans(pMsg.obj as PortalPlans);
-    setMe(account);
-    if (!account) return;
-    setNowMs(Date.now());
-    const [nMsg, sMsg, tMsg] = await Promise.all([
-      HttpUtil.get<PortalNode[]>('/portal/api/nodes', undefined, { silent: true }),
-      HttpUtil.get<PortalSubLinks>('/portal/api/sub/links', undefined, { silent: true }),
-      HttpUtil.get<PortalTxn[]>('/portal/api/wallet/txns', undefined, { silent: true }),
-    ]);
-    if (nMsg.success && Array.isArray(nMsg.obj)) setNodes(nMsg.obj as PortalNode[]);
-    if (sMsg.success && sMsg.obj) setSubs(sMsg.obj as PortalSubLinks);
-    if (tMsg.success && Array.isArray(tMsg.obj)) setTxns(tMsg.obj as PortalTxn[]);
+  const refreshPromise = useRef<Promise<void> | null>(null);
+  const refresh = useCallback(() => {
+    if (refreshPromise.current) return refreshPromise.current;
+    const request = (async () => {
+      const [account, pMsg] = await Promise.all([
+        fetchMe(),
+        HttpUtil.get<PortalPlans>('/portal/api/plans', undefined, { silent: true }),
+      ]);
+      if (pMsg.success && pMsg.obj) setPlans(pMsg.obj as PortalPlans);
+      setMe(account);
+      if (!account) return;
+      setNowMs(Date.now());
+      const [nMsg, sMsg, tMsg] = await Promise.all([
+        HttpUtil.get<PortalNode[]>('/portal/api/nodes', undefined, { silent: true }),
+        HttpUtil.get<PortalSubLinks>('/portal/api/sub/links', undefined, { silent: true }),
+        HttpUtil.get<PortalTxn[]>('/portal/api/wallet/txns', undefined, { silent: true }),
+      ]);
+      if (nMsg.success && Array.isArray(nMsg.obj)) setNodes(nMsg.obj as PortalNode[]);
+      if (sMsg.success && sMsg.obj) setSubs(sMsg.obj as PortalSubLinks);
+      if (tMsg.success && Array.isArray(tMsg.obj)) setTxns(tMsg.obj as PortalTxn[]);
+    })().finally(() => {
+      refreshPromise.current = null;
+    });
+    refreshPromise.current = request;
+    return request;
   }, []);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const pMsg = await HttpUtil.get<PortalPlans>('/portal/api/plans', undefined, {
-        silent: true,
-      });
-      if (!cancelled && pMsg.success && pMsg.obj) setPlans(pMsg.obj as PortalPlans);
-      const account = await fetchMe();
+      await refresh();
       if (cancelled) return;
-      setMe(account);
       setBooted(true);
-      if (account) await refresh();
     })();
     return () => {
       cancelled = true;
@@ -181,11 +176,6 @@ export default function PortalPage() {
       document.removeEventListener('visibilitychange', reloadVisiblePortal);
     };
   }, [refresh]);
-
-  const onLangChange = useCallback((next: string) => {
-    setLang(next);
-    LanguageManager.setLanguage(next, 'subscription');
-  }, []);
 
   const copy = useCallback(
     async (value: string, toast?: string) => {
@@ -272,41 +262,12 @@ export default function PortalPage() {
     setTxns([]);
   }, []);
 
-  const themeConfig = useMemo(() => {
-    const baseTheme = buildAntdThemeConfig(false, false);
-    const primary = {
-      colorPrimary: ACCENT.primary,
-      colorPrimaryHover: ACCENT.hover,
-      colorPrimaryActive: ACCENT.active,
-    };
-    return {
-      ...baseTheme,
-      token: {
-        ...baseTheme.token,
-        ...primary,
-        colorBgBase: '#ffffff',
-        colorBgContainer: '#ffffff',
-        colorBgElevated: '#ffffff',
-        colorBorder: '#dfe8f3',
-        colorText: '#14213a',
-        colorTextSecondary: '#718096',
-        colorLink: ACCENT.primary,
-        colorInfo: ACCENT.primary,
-      },
-      components: {
-        ...baseTheme.components,
-        Button: { ...baseTheme.components?.Button, ...primary },
-        Progress: { ...baseTheme.components?.Progress, remainingColor: ACCENT.rail },
-      },
-    };
-  }, []);
-
   const direction = lang === 'fa-IR' || lang === 'ar-EG' ? 'rtl' : 'ltr';
   // The customer portal is intentionally a bright, branded surface. Keep
   // the persisted panel theme from turning this page into a dark UI.
   const pageClass = 'portal-page x-user-center';
 
-  const siteTitle = plans?.siteTitle || 'X用户中心';
+  const siteTitle = plans?.siteTitle || t('portal.defaultTitle');
 
   useEffect(() => {
     document.title = siteTitle;
@@ -416,8 +377,8 @@ export default function PortalPage() {
                   <Button
                     icon={<QrcodeOutlined />}
                     onClick={() => setQrSubscription({ title: row.title, url: row.url })}
-                    aria-label="显示订阅二维码"
-                    title="显示订阅二维码"
+                    aria-label={t('portal.showQrCode')}
+                    title={t('portal.showQrCode')}
                   />
                   <Button
                     icon={<CopyOutlined />}
@@ -471,7 +432,16 @@ export default function PortalPage() {
       });
     }
     return items;
-  }, [t, subRows, primarySubscription?.subUrl, subscriptionItems, apps, initialPlatform, copy]);
+  }, [
+    t,
+    subRows,
+    primarySubscription?.subUrl,
+    subscriptionItems,
+    apps,
+    initialPlatform,
+    copy,
+    setQrSubscription,
+  ]);
 
   if (!booted) {
     return <PortalLoading />;
@@ -486,22 +456,22 @@ export default function PortalPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   const navItems = [
-    { key: 'overview' as const, label: '概览', icon: <HomeOutlined /> },
+    { key: 'overview' as const, label: t('portal.navOverview'), icon: <DashboardOutlined /> },
     {
       key: 'nodes' as const,
-      label: '我的节点',
-      icon: <CloudServerOutlined />,
+      label: t('portal.myNodes'),
+      icon: <GlobalOutlined />,
       count: nodes.length,
     },
-    { key: 'wallet' as const, label: '余额与续期', icon: <CreditCardOutlined /> },
-    { key: 'account' as const, label: '账户设置', icon: <UserOutlined /> },
+    { key: 'wallet' as const, label: t('portal.navWallet'), icon: <WalletOutlined /> },
+    { key: 'account' as const, label: t('portal.navAccount'), icon: <IdcardOutlined /> },
   ];
 
   const nodeRows = (visibleNodes: PortalNode[]) =>
     visibleNodes.map((n) => (
       <div key={`${n.email}-${n.protocol}-${n.remark}`} className="portal-node-row">
         <span className="portal-node-icon">
-          <ApiOutlined />
+          <CloudServerOutlined />
         </span>
         <div className="portal-node-main">
           <span className="portal-node-remark" dir="auto">
@@ -514,7 +484,7 @@ export default function PortalPage() {
         {n.enable ? (
           <span className="portal-node-pulse">
             <i />
-            运行中
+            {t('portal.running')}
           </span>
         ) : (
           <Tag color="red">{t('disabled')}</Tag>
@@ -523,66 +493,65 @@ export default function PortalPage() {
     ));
 
   const versionLabel = window.X_UI_CUR_VER ? `v${window.X_UI_CUR_VER}` : '';
-  const languageOptions = LanguageManager.supportedLanguages.map((item) => ({
-    value: item.value,
-    label: (
-      <span className="portal-language-option">
-        <span>{item.icon}</span>
-        <span>{item.name}</span>
-      </span>
-    ),
-  }));
-
   const metrics = [
     {
       key: 'balance',
       label: t('portal.balance'),
       value: formatCents(balance),
-      hint: '可用于节点续期',
+      hint: t('portal.balanceHint'),
       icon: <WalletOutlined />,
       tone: 'blue',
     },
     {
       key: 'expiry',
-      label: '剩余时间',
-      value: daysLeft === null ? '长期有效' : `${daysLeft} 天`,
+      label: t('portal.remainingTime'),
+      value: daysLeft === null ? t('portal.longTerm') : t('portal.daysCount', { count: daysLeft }),
       hint:
         expireMs > 0
-          ? `到期 ${IntlUtil.formatDate(expireMs, 'gregorian', lang)}`
-          : '当前账户无到期限制',
+          ? t('portal.expiresOn', { date: IntlUtil.formatDate(expireMs, 'gregorian', lang) })
+          : t('portal.noExpiryLimit'),
       icon: <CalendarOutlined />,
       tone: 'violet',
     },
     {
       key: 'traffic',
-      label: '本期已用',
+      label: t('portal.periodUsed'),
       value: SizeFormatter.sizeFormat(totalUsed),
-      hint: totalQuota > 0 ? `共 ${SizeFormatter.sizeFormat(totalQuota)}` : '不限流量',
-      icon: <ArrowUpOutlined />,
+      hint:
+        totalQuota > 0
+          ? t('portal.totalTrafficHint', { total: SizeFormatter.sizeFormat(totalQuota) })
+          : t('portal.unlimitedTraffic'),
+      icon: <BarChartOutlined />,
       tone: 'cyan',
     },
     {
       key: 'nodes',
-      label: '可用节点',
+      label: t('portal.availableNodes'),
       value: `${runningNodes} / ${nodes.length}`,
-      hint: runningNodes === nodes.length ? '全部运行正常' : '部分节点不可用',
-      icon: <GlobalOutlined />,
+      hint:
+        runningNodes === nodes.length
+          ? t('portal.allNodesHealthy')
+          : t('portal.someNodesUnavailable'),
+      icon: <CloudServerOutlined />,
       tone: 'green',
     },
   ];
 
   return (
-    <ConfigProvider theme={themeConfig} direction={direction}>
+    <ConfigProvider theme={portalTheme} direction={direction}>
       {messageContextHolder}
       <Layout className={pageClass} dir={direction}>
-        <aside className="portal-sidebar" aria-label={`${siteTitle}导航`}>
+        <aside
+          className="portal-sidebar"
+          aria-label={t('portal.portalNavigation', { title: siteTitle })}
+        >
           <div className="sidebar-brand">
             <span className="sidebar-logo" aria-hidden="true">
               <SafetyCertificateFilled />
             </span>
             <span className="sidebar-brand-copy">
               <strong>{siteTitle}</strong>
-              <small>客户服务中心</small>
+              <small>{t('portal.serviceCenter')}</small>
             </span>
           </div>
           <nav className="sidebar-nav">
@@ -611,8 +580,8 @@ export default function PortalPage() {
                 <ShoppingCartOutlined />
               </span>
               <span>
-                <strong>购买卡密</strong>
-                <small>前往商城充值余额</small>
+                <strong>{t('portal.buyCode')}</strong>
+                <small>{t('portal.buyCodeHint')}</small>
               </span>
               <RightOutlined />
             </a>
@@ -623,20 +592,11 @@ export default function PortalPage() {
           <header className="portal-topbar">
             <div className="portal-title-group">
               <span className="portal-kicker">
-                {siteTitle} <i>/</i> {sectionCopy.kicker}
+                {siteTitle} <i>/</i> {t(sectionCopy.kicker)}
               </span>
-              <h1>{sectionCopy.title}</h1>
+              <h1>{t(sectionCopy.title)}</h1>
             </div>
             <div className="portal-topbar-actions">
-              <Select
-                className="portal-language-select"
-                value={lang}
-                onChange={onLangChange}
-                options={languageOptions}
-                suffixIcon={<GlobalOutlined />}
-                popupMatchSelectWidth={180}
-                aria-label="选择语言"
-              />
               <button
                 type="button"
                 className="portal-user-chip"
@@ -646,7 +606,7 @@ export default function PortalPage() {
                 <span>
                   <b>{me.username}</b>
                   <small>
-                    <i /> 账户正常
+                    <i /> {t('portal.accountHealthy')}
                   </small>
                 </span>
               </button>
@@ -660,7 +620,7 @@ export default function PortalPage() {
               />
             </div>
           </header>
-          <nav className="portal-mobile-nav" aria-label="客户中心导航">
+          <nav className="portal-mobile-nav" aria-label={t('portal.mobileNavigation')}>
             {navItems.map((item) => (
               <button
                 key={item.key}
@@ -681,19 +641,17 @@ export default function PortalPage() {
                   <section className="portal-welcome-strip">
                     <div className="portal-welcome-copy">
                       <span className="portal-status-pill">
-                        <CheckCircleFilled /> 服务运行正常
+                        <CheckCircleFilled /> {t('portal.serviceHealthy')}
                       </span>
-                      <h2>
-                        欢迎回来，<strong>{me.username}</strong>
-                      </h2>
-                      <p>节点、订阅与账户信息已经为你准备好。</p>
+                      <h2>{t('portal.welcomeUser', { username: me.username })}</h2>
+                      <p>{t('portal.welcomeDescription')}</p>
                       <div className="portal-hero-actions">
                         <Button
                           type="primary"
                           icon={<LinkOutlined />}
                           onClick={() => switchSection('nodes')}
                         >
-                          查看订阅
+                          {t('portal.viewSubscription')}
                         </Button>
                         <Button
                           icon={<ClockCircleOutlined />}
@@ -738,10 +696,10 @@ export default function PortalPage() {
                       <div className="portal-section-heading">
                         <div>
                           <span className="portal-section-eyebrow">TRAFFIC</span>
-                          <h3>本月流量</h3>
+                          <h3>{t('portal.monthlyTraffic')}</h3>
                         </div>
                         <strong className="portal-traffic-percent">
-                          {totalQuota > 0 ? `${trafficPercent.toFixed(1)}%` : '不限量'}
+                          {totalQuota > 0 ? `${trafficPercent.toFixed(1)}%` : t('portal.unlimited')}
                         </strong>
                       </div>
                       <Progress
@@ -753,20 +711,22 @@ export default function PortalPage() {
                       <div className="portal-traffic-stats">
                         <div>
                           <span>
-                            <ArrowDownOutlined /> 已使用
+                            <ArrowDownOutlined /> {t('portal.usedTraffic')}
                           </span>
                           <strong>{SizeFormatter.sizeFormat(totalUsed)}</strong>
                         </div>
                         <div>
-                          <span>剩余流量</span>
+                          <span>{t('portal.remainingTraffic')}</span>
                           <strong>
                             {totalQuota > 0 ? SizeFormatter.sizeFormat(remainingTraffic) : '∞'}
                           </strong>
                         </div>
                         <div>
-                          <span>总额度</span>
+                          <span>{t('portal.totalQuota')}</span>
                           <strong>
-                            {totalQuota > 0 ? SizeFormatter.sizeFormat(totalQuota) : '不限量'}
+                            {totalQuota > 0
+                              ? SizeFormatter.sizeFormat(totalQuota)
+                              : t('portal.unlimited')}
                           </strong>
                         </div>
                       </div>
@@ -776,7 +736,7 @@ export default function PortalPage() {
                       <div className="portal-section-heading">
                         <div>
                           <span className="portal-section-eyebrow">SHORTCUTS</span>
-                          <h3>快捷操作</h3>
+                          <h3>{t('portal.quickActions')}</h3>
                         </div>
                       </div>
                       <div className="portal-quick-actions">
@@ -784,16 +744,16 @@ export default function PortalPage() {
                           <span className="is-blue">
                             <QrcodeOutlined />
                           </span>
-                          <b>导入订阅</b>
-                          <small>复制链接或扫码导入</small>
+                          <b>{t('portal.importSubscription')}</b>
+                          <small>{t('portal.importSubscriptionHint')}</small>
                           <RightOutlined />
                         </button>
                         <button type="button" onClick={() => switchSection('wallet')}>
                           <span className="is-violet">
-                            <CreditCardOutlined />
+                            <GiftOutlined />
                           </span>
-                          <b>卡密充值</b>
-                          <small>兑换卡密到账户余额</small>
+                          <b>{t('portal.rechargeWithCode')}</b>
+                          <small>{t('portal.rechargeWithCodeHint')}</small>
                           <RightOutlined />
                         </button>
                       </div>
@@ -808,7 +768,7 @@ export default function PortalPage() {
                           <h3>{t('portal.myNodes')}</h3>
                         </div>
                         <Button type="link" onClick={() => switchSection('nodes')}>
-                          查看全部 <RightOutlined />
+                          {t('portal.viewAll')} <RightOutlined />
                         </Button>
                       </div>
                       {nodeRows(nodes.slice(0, 3))}
@@ -826,7 +786,7 @@ export default function PortalPage() {
                         <h3>{t('portal.myNodes')}</h3>
                       </div>
                       <span className="portal-live-badge">
-                        <i /> {runningNodes} 个运行中
+                        <i /> {t('portal.runningCount', { count: runningNodes })}
                       </span>
                     </div>
                     {nodes.length > 0 ? nodeRows(nodes) : <Empty description={t('noData')} />}
@@ -836,13 +796,13 @@ export default function PortalPage() {
                       <div className="portal-section-heading">
                         <div>
                           <span className="portal-section-eyebrow">SUBSCRIPTION</span>
-                          <h3>订阅与客户端</h3>
+                          <h3>{t('portal.subscriptionsAndClients')}</h3>
                         </div>
                       </div>
                       <Tabs className="portal-tabs" tabBarGutter={24} items={tabs} />
                     </section>
                   ) : (
-                    <Empty description="当前账号暂无可用订阅" className="portal-empty" />
+                    <Empty description={t('portal.noSubscriptions')} className="portal-empty" />
                   )}
                 </>
               )}
@@ -851,12 +811,12 @@ export default function PortalPage() {
                 <>
                   <section className="portal-wallet-hero">
                     <div className="portal-wallet-icon">
-                      <CreditCardOutlined />
+                      <WalletOutlined />
                     </div>
                     <div>
-                      <span>账户可用余额</span>
+                      <span>{t('portal.availableBalance')}</span>
                       <strong>{formatCents(balance)}</strong>
-                      <small>余额可直接用于续期已绑定的节点</small>
+                      <small>{t('portal.availableBalanceHint')}</small>
                     </div>
                     <Button
                       type="primary"
@@ -869,7 +829,7 @@ export default function PortalPage() {
                         }))
                       }
                     >
-                      立即续期
+                      {t('portal.renewNow')}
                     </Button>
                   </section>
                   <div className="portal-wallet-grid">
@@ -880,9 +840,7 @@ export default function PortalPage() {
                           <h3>{t('portal.recharge')}</h3>
                         </div>
                       </div>
-                      <p className="portal-section-description">
-                        输入有效卡密，金额会立即充值到账户余额。
-                      </p>
+                      <p className="portal-section-description">{t('portal.redeemDescription')}</p>
                       <div className="portal-recharge-row">
                         <Input
                           value={redeemCode}
@@ -905,18 +863,18 @@ export default function PortalPage() {
                             <ShoppingCartOutlined />
                           </span>
                           <span className="portal-purchase-copy">
-                            <strong>还没有卡密？</strong>
-                            <small>前往购买页面，完成后回到这里兑换</small>
+                            <strong>{t('portal.noCodeYet')}</strong>
+                            <small>{t('portal.purchaseDescription')}</small>
                           </span>
                           <span className="portal-purchase-button">
-                            立即购买 <RightOutlined />
+                            {t('portal.buyNow')} <RightOutlined />
                           </span>
                         </a>
                       )}
                     </section>
                     <section className="portal-surface portal-expiry-panel">
                       <span className="portal-section-eyebrow">SERVICE TERM</span>
-                      <h3>当前有效期</h3>
+                      <h3>{t('portal.currentValidity')}</h3>
                       <div className="portal-expiry-value">
                         <CalendarOutlined />
                         <strong>
@@ -925,9 +883,13 @@ export default function PortalPage() {
                             : t('subscription.noExpiry')}
                         </strong>
                       </div>
-                      <span>{daysLeft === null ? '长期有效' : `剩余 ${daysLeft} 天`}</span>
+                      <span>
+                        {daysLeft === null
+                          ? t('portal.longTerm')
+                          : t('portal.daysRemaining', { count: daysLeft })}
+                      </span>
                       <Button icon={<ReloadOutlined />} onClick={refresh}>
-                        刷新数据
+                        {t('portal.refreshData')}
                       </Button>
                     </section>
                   </div>
@@ -956,7 +918,7 @@ export default function PortalPage() {
                         ))}
                       </div>
                     ) : (
-                      <Empty description="暂无余额流水" className="portal-empty" />
+                      <Empty description={t('portal.noTransactions')} className="portal-empty" />
                     )}
                   </section>
                 </>
@@ -969,21 +931,24 @@ export default function PortalPage() {
                     <div>
                       <h3>{me.username}</h3>
                       <span className="portal-live-badge">
-                        <i /> 账户状态正常
+                        <i /> {t('portal.accountHealthy')}
                       </span>
                     </div>
                   </div>
                   <div className="portal-account-grid">
                     <div>
-                      <span>登录用户名</span>
+                      <span>{t('portal.loginUsername')}</span>
                       <strong>{me.username}</strong>
                     </div>
                     <div>
-                      <span>已绑定客户端</span>
+                      <span>{t('portal.boundClients')}</span>
                       <div className="portal-account-bindings">
                         {portalBindings.map((binding) => (
                           <Tag key={binding.email} color="blue">
-                            {binding.email} · {formatCents(binding.pricePerMonthCents)}/月
+                            {binding.email} ·{' '}
+                            {t('portal.pricePerMonth', {
+                              price: formatCents(binding.pricePerMonthCents),
+                            })}
                           </Tag>
                         ))}
                       </div>
@@ -991,13 +956,13 @@ export default function PortalPage() {
                   </div>
                   <div className="portal-account-actions">
                     <Button icon={<ReloadOutlined />} onClick={refresh}>
-                      刷新账户资料
+                      {t('portal.refreshAccount')}
                     </Button>
                     <Button danger icon={<LogoutOutlined />} onClick={onLogout}>
                       {t('logout')}
                     </Button>
                   </div>
-                  <p className="portal-account-note">登录资料由管理员在客户门户管理中维护。</p>
+                  <p className="portal-account-note">{t('portal.accountManagedByAdmin')}</p>
                 </section>
               )}
             </div>
@@ -1017,12 +982,12 @@ export default function PortalPage() {
       >
         {portalBindings.length > 1 && (
           <div className="portal-renew-target">
-            <span>选择续费客户端</span>
+            <span>{t('portal.selectRenewClient')}</span>
             <Select
               value={selectedBinding?.email}
               options={portalBindings.map((binding) => ({
                 value: binding.email,
-                label: `${binding.email} · ${formatCents(binding.pricePerMonthCents)}/月`,
+                label: `${binding.email} · ${t('portal.pricePerMonth', { price: formatCents(binding.pricePerMonthCents) })}`,
               }))}
               onChange={(email) => setRenew((current) => ({ ...current, email }))}
             />
@@ -1040,7 +1005,10 @@ export default function PortalPage() {
           />
         </div>
         <p className="portal-renew-hint">
-          续费项目：{selectedBinding?.email || '—'}，月费 {formatCents(monthlyPrice)}。
+          {t('portal.renewItem', {
+            item: selectedBinding?.email || '—',
+            price: formatCents(monthlyPrice),
+          })}
           <br />
           {t('portal.renewHint', {
             balance: formatCents(balance),
@@ -1061,8 +1029,8 @@ export default function PortalPage() {
               <QrcodeOutlined />
             </span>
             <div>
-              <strong>订阅二维码</strong>
-              <small>扫码快速导入客户端</small>
+              <strong>{t('portal.subscriptionQr')}</strong>
+              <small>{t('portal.subscriptionQrHint')}</small>
             </div>
           </div>
         }
@@ -1072,7 +1040,7 @@ export default function PortalPage() {
           <div className="portal-sub-qr">
             <div className="portal-sub-qr-badge">
               <SafetyCertificateFilled />
-              安全订阅
+              {t('portal.secureSubscription')}
             </div>
             <div className="portal-sub-qr-frame">
               <i aria-hidden="true" />
@@ -1087,7 +1055,7 @@ export default function PortalPage() {
             </div>
             <div className="portal-sub-qr-copy">
               <strong>{qrSubscription.title}</strong>
-              <span>使用支持订阅导入的客户端扫描上方二维码</span>
+              <span>{t('portal.scanQrDescription')}</span>
             </div>
             <div className="portal-sub-qr-link">
               <LinkOutlined />
@@ -1100,7 +1068,7 @@ export default function PortalPage() {
               icon={<CopyOutlined />}
               onClick={() => copy(qrSubscription.url)}
             >
-              复制订阅链接
+              {t('portal.copySubscriptionLink')}
             </Button>
           </div>
         )}

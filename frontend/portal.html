@@ -1,14 +1,52 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN" style="color-scheme: light; background: #f5f8ff">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex,nofollow" />
     <title>Account</title>
+    <style>
+      html,
+      body,
+      #app {
+        min-height: 100%;
+        margin: 0;
+        background: #f5f8ff;
+      }
+      body {
+        color: #17213c;
+        font-family: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+      .portal-boot-shell {
+        box-sizing: border-box;
+        display: grid;
+        place-items: center;
+        min-height: 100vh;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 14% 0%, rgba(103, 129, 246, 0.14), transparent 29%),
+          radial-gradient(circle at 93% 6%, rgba(65, 203, 190, 0.13), transparent 25%),
+          linear-gradient(145deg, #f7f9ff 0%, #f8fbfd 55%, #f3f9fa 100%);
+      }
+      .portal-boot-mark {
+        width: 46px;
+        height: 46px;
+        border: 4px solid rgba(65, 105, 225, 0.14);
+        border-top-color: #4169e1;
+        border-radius: 50%;
+        animation: portal-boot-spin 700ms linear infinite;
+      }
+      @keyframes portal-boot-spin {
+        to { transform: rotate(360deg); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .portal-boot-mark { animation: none; border-top-color: rgba(65, 105, 225, 0.5); }
+      }
+    </style>
   </head>
   <body>
     <div id="message"></div>
-    <div id="app"></div>
+    <div id="app"><div class="portal-boot-shell"><span class="portal-boot-mark"></span></div></div>
     <script type="module" src="/src/entries/portal.tsx"></script>
   </body>
 </html>

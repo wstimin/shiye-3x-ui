@@ -1,23 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button, ConfigProvider, Form, Input, Layout, Menu, Popover, Space, message } from 'antd';
 import {
-  Button,
-  ConfigProvider,
-  Form,
-  Input,
-  Layout,
-  Menu,
-  Popover,
-  Space,
-  Spin,
-  message,
-} from 'antd';
-import {
+  CheckCircleFilled,
+  GlobalOutlined,
   LockOutlined,
-  MoonFilled,
-  MoonOutlined,
+  LoginOutlined,
   SafetyCertificateFilled,
-  SunOutlined,
+  ThunderboltFilled,
   TranslationOutlined,
   UserOutlined,
 } from '@ant-design/icons';
@@ -26,8 +16,8 @@ import { FormProvider, useForm } from 'react-hook-form';
 import { HttpUtil, LanguageManager } from '@/utils';
 import { FormField, rhfZodValidate } from '@/components/form/rhf';
 import { setMessageInstance } from '@/utils/messageBus';
-import { buildAntdThemeConfig, pauseAnimationsUntilLeave, useTheme } from '@/hooks/useTheme';
 import { PortalLoginSchema, type PortalLoginValues, type PortalPlans } from './portalModel';
+import { portalTheme } from './portalTheme';
 import './PortalPage.css';
 
 interface PortalLoginProps {
@@ -43,7 +33,6 @@ const JSON_POST_OPTIONS = {
 // Standalone customer sign-in; posts to the portal API, never to /login.
 export default function PortalLogin({ plans, onDone }: PortalLoginProps) {
   const { t } = useTranslation();
-  const { isDark, isUltra, toggleTheme, toggleUltra } = useTheme();
   const [messageApi, messageContextHolder] = message.useMessage();
 
   useEffect(() => {
@@ -73,89 +62,99 @@ export default function PortalLogin({ plans, onDone }: PortalLoginProps) {
     }
   };
 
-  const cycleTheme = () => {
-    pauseAnimationsUntilLeave('portal-theme-cycle');
-    if (!isDark) {
-      toggleTheme();
-      if (isUltra) toggleUltra();
-    } else if (!isUltra) {
-      toggleUltra();
-    } else {
-      toggleUltra();
-      toggleTheme();
-    }
-  };
-
-  const langMenuItems = (
-    LanguageManager.supportedLanguages as { value: string; name: string; icon: string }[]
-  ).map((l) => ({
-    key: l.value,
-    label: (
-      <Space size={8}>
-        <span aria-hidden="true">{l.icon}</span>
-        <span>{l.name}</span>
-      </Space>
-    ),
-  }));
-
-  const themeIcon = !isDark ? <SunOutlined /> : !isUltra ? <MoonOutlined /> : <MoonFilled />;
-  const title = plans?.siteTitle || 'X用户中心';
+  const languageItems = useMemo(
+    () =>
+      (LanguageManager.supportedLanguages as { value: string; name: string; icon: string }[]).map(
+        (item) => ({
+          key: item.value,
+          label: (
+            <Space size={8}>
+              <span aria-hidden="true">{item.icon}</span>
+              <span>{item.name}</span>
+            </Space>
+          ),
+        }),
+      ),
+    [],
+  );
+  const currentLanguage = LanguageManager.supportedLanguages.find((item) => item.value === lang);
+  const direction = lang === 'fa-IR' || lang === 'ar-EG' ? 'rtl' : 'ltr';
+  const title = plans?.siteTitle || t('portal.defaultTitle');
 
   return (
-    <ConfigProvider theme={buildAntdThemeConfig(false, false)}>
+    <ConfigProvider theme={portalTheme} direction={direction}>
       {messageContextHolder}
-      <Layout className="portal-app x-user-center">
-        <Layout.Content className="portal-content">
-          <div className="portal-toolbar">
-            <Button
-              id="portal-theme-cycle"
-              shape="circle"
-              size="large"
-              className="toolbar-btn"
-              aria-label={t('menu.theme')}
-              title={t('menu.theme')}
-              icon={themeIcon}
-              onClick={cycleTheme}
-            />
-            <Popover
-              rootClassName={isDark ? 'dark' : 'light'}
-              placement="bottomRight"
-              trigger="click"
-              styles={{ content: { padding: 4 } }}
-              content={
-                <Menu
-                  mode="vertical"
-                  selectable
-                  selectedKeys={[lang]}
-                  items={langMenuItems}
-                  onClick={({ key }) => onLangChange(key)}
-                  style={{ border: 'none', minWidth: 160 }}
-                />
-              }
-            >
-              <Button
-                shape="circle"
-                size="large"
-                className="toolbar-btn"
-                aria-label={t('pages.settings.language')}
-                icon={<TranslationOutlined />}
-              />
-            </Popover>
-          </div>
-
-          <div className="portal-wrapper">
-            <div className="portal-card">
-              <div className="brand">
-                <div className="brand-title-row">
-                  <span className="brand-symbol" aria-hidden="true">
-                    <SafetyCertificateFilled />
-                  </span>
-                  <span className="brand-name">{title}</span>
-                </div>
-                <span className="brand-accent" aria-hidden="true" />
+      <Layout className="portal-app x-user-center" dir={direction}>
+        <Layout.Content className="portal-content portal-login-content">
+          <div className="portal-login-orb portal-login-orb-one" aria-hidden="true" />
+          <div className="portal-login-orb portal-login-orb-two" aria-hidden="true" />
+          <div className="portal-login-layout">
+            <section className="portal-login-story" aria-label={title}>
+              <div className="portal-login-brand">
+                <span className="portal-login-logo" aria-hidden="true">
+                  <SafetyCertificateFilled />
+                </span>
+                <span>
+                  <strong>{title}</strong>
+                  <small>{t('portal.loginBrandCaption')}</small>
+                </span>
               </div>
-              <h2 className="welcome">{t('portal.welcome')}</h2>
-              <p className="portal-login-subtitle">登录后管理您的订阅、节点与账户余额</p>
+              <div className="portal-login-story-copy">
+                <span className="portal-login-eyebrow">
+                  <CheckCircleFilled /> {t('portal.loginStatus')}
+                </span>
+                <h1>{t('portal.loginHeroTitle')}</h1>
+                <p>{t('portal.loginHeroDescription')}</p>
+              </div>
+              <div className="portal-login-benefits">
+                <span>
+                  <GlobalOutlined />
+                  <b>{t('portal.loginBenefitNodes')}</b>
+                </span>
+                <span>
+                  <ThunderboltFilled />
+                  <b>{t('portal.loginBenefitFast')}</b>
+                </span>
+                <span>
+                  <SafetyCertificateFilled />
+                  <b>{t('portal.loginBenefitSecure')}</b>
+                </span>
+              </div>
+            </section>
+
+            <section className="portal-login-card">
+              <div className="portal-login-card-head">
+                <div>
+                  <span className="portal-login-card-kicker">{t('portal.loginKicker')}</span>
+                  <h2>{t('portal.welcome')}</h2>
+                  <p>{t('portal.loginSubtitle')}</p>
+                </div>
+                <Popover
+                  rootClassName="light portal-language-popover"
+                  placement="bottomRight"
+                  trigger="click"
+                  styles={{ content: { padding: 4 } }}
+                  content={
+                    <Menu
+                      mode="vertical"
+                      selectable
+                      selectedKeys={[lang]}
+                      items={languageItems}
+                      onClick={({ key }) => onLangChange(key)}
+                      style={{ border: 'none', minWidth: 170 }}
+                    />
+                  }
+                >
+                  <Button
+                    className="portal-login-language"
+                    aria-label={t('pages.settings.language')}
+                    icon={<TranslationOutlined />}
+                  >
+                    <span aria-hidden="true">{currentLanguage?.icon}</span>
+                    <span>{currentLanguage?.name}</span>
+                  </Button>
+                </Popover>
+              </div>
 
               <FormProvider {...methods}>
                 <Form
@@ -172,7 +171,7 @@ export default function PortalLogin({ plans, onDone }: PortalLoginProps) {
                       prefix={<UserOutlined />}
                       autoComplete="username"
                       size="large"
-                      placeholder={t('username')}
+                      placeholder={t('portal.usernamePlaceholder')}
                       autoFocus
                     />
                   </FormField>
@@ -186,7 +185,7 @@ export default function PortalLogin({ plans, onDone }: PortalLoginProps) {
                       prefix={<LockOutlined />}
                       autoComplete="current-password"
                       size="large"
-                      placeholder={t('password')}
+                      placeholder={t('portal.passwordPlaceholder')}
                     />
                   </FormField>
 
@@ -197,13 +196,17 @@ export default function PortalLogin({ plans, onDone }: PortalLoginProps) {
                       loading={submitting}
                       size="large"
                       block
+                      icon={<LoginOutlined />}
                     >
                       {t('login')}
                     </Button>
                   </Form.Item>
                 </Form>
               </FormProvider>
-            </div>
+              <p className="portal-login-footnote">
+                <SafetyCertificateFilled /> {t('portal.loginFootnote')}
+              </p>
+            </section>
           </div>
         </Layout.Content>
       </Layout>
@@ -211,13 +214,13 @@ export default function PortalLogin({ plans, onDone }: PortalLoginProps) {
   );
 }
 
-// Loading shell keeps hooks in one component while auth state resolves.
+// Bright loading shell shown only while the current session is checked.
 export function PortalLoading() {
   return (
     <Layout className="portal-app x-user-center">
       <Layout.Content className="portal-content">
-        <div className="portal-loading">
-          <Spin size="large" />
+        <div className="portal-loading" aria-label="Loading">
+          <span className="portal-loading-mark" />
         </div>
       </Layout.Content>
     </Layout>

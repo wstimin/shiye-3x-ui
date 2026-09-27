@@ -15,7 +15,7 @@ case $1 in
         ;;
     arm)
         if [ "$2" = "v6" ]; then
-            ARCH="arm32-v6a"
+            ARCH="arm32-v6"
             FNAME="armv6"
         else
             ARCH="arm32-v7a"
