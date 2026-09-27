@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import uPlot from 'uplot';
 import 'uplot/dist/uPlot.min.css';
 import './Sparkline.css';
@@ -269,7 +269,9 @@ export default function Sparkline(props: SparklineProps) {
   };
   const cfgRef = useRef(cfg);
   const viewRef = useRef<SparklineView>({ points, yDomain, yTicks, xTickIndexes, extremaPoints });
-  useEffect(() => {
+  // uPlot reads these refs from imperative callbacks. Keep them in sync before
+  // paint so a data refresh cannot briefly reuse the previous scale/domain.
+  useLayoutEffect(() => {
     cfgRef.current = cfg;
     viewRef.current = { points, yDomain, yTicks, xTickIndexes, extremaPoints };
   });
