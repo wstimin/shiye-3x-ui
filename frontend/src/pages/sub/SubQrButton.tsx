@@ -1,7 +1,13 @@
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Input, Modal, QRCode } from 'antd';
-import { CopyOutlined, DownloadOutlined, QrcodeOutlined } from '@ant-design/icons';
+import {
+  CopyOutlined,
+  DownloadOutlined,
+  LinkOutlined,
+  QrcodeOutlined,
+  SafetyCertificateFilled,
+} from '@ant-design/icons';
 
 interface SubQrButtonProps {
   value: string;
@@ -34,27 +40,47 @@ export default function SubQrButton({ value, label, onCopy }: SubQrButtonProps) 
         centered
         destroyOnHidden
         rootClassName="sub-qr-modal"
-        title={t('subscription.qrTitle')}
+        title={
+          <div className="sub-qr-modal-title">
+            <span className="sub-qr-modal-title-icon">
+              <QrcodeOutlined />
+            </span>
+            <span className="sub-qr-modal-title-copy">
+              <strong>{t('subscription.qrTitle')}</strong>
+              <small>{label}</small>
+            </span>
+          </div>
+        }
       >
-        <p className="sub-muted sub-qr-modal-hint">{t('subscription.qrHint')}</p>
-        <div ref={qrRef} className="sub-qr-modal-code">
-          <QRCode
+        <div className="sub-qr-modal-security">
+          <SafetyCertificateFilled />
+          <span>{t('subscription.qrHint')}</span>
+        </div>
+        <div className="sub-qr-modal-code-frame">
+          <i aria-hidden="true" />
+          <div ref={qrRef} className="sub-qr-modal-code">
+            <QRCode
+              value={value}
+              size={228}
+              type="canvas"
+              errorLevel="L"
+              marginSize={3}
+              bordered={false}
+              color="#172554"
+              bgColor="#ffffff"
+            />
+          </div>
+        </div>
+        <div className="sub-qr-modal-link-shell">
+          <LinkOutlined />
+          <Input.TextArea
+            className="sub-qr-modal-link"
             value={value}
-            size={240}
-            type="canvas"
-            marginSize={2}
-            bordered={false}
-            color="#000000"
-            bgColor="#ffffff"
+            readOnly
+            dir="ltr"
+            autoSize={{ minRows: 2, maxRows: 4 }}
           />
         </div>
-        <Input.TextArea
-          className="sub-qr-modal-link"
-          value={value}
-          readOnly
-          dir="ltr"
-          autoSize={{ minRows: 2, maxRows: 5 }}
-        />
         <div className="sub-qr-modal-actions">
           <Button type="primary" size="large" icon={<CopyOutlined />} onClick={() => onCopy(value)}>
             {t('copy')}
