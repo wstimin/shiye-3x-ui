@@ -1594,18 +1594,6 @@
   white-space: nowrap;
 }
 
-.x-user-center .portal-account-bindings {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.x-user-center .portal-account-bindings .ant-tag {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .x-user-center .portal-account-actions {
   display: flex;
   flex-wrap: wrap;

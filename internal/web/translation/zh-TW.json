@@ -203,7 +203,6 @@
     "refreshData": "重新整理資料",
     "noTransactions": "暫無餘額記錄",
     "loginUsername": "登入使用者名稱",
-    "boundClients": "已綁定客戶端",
     "pricePerMonth": "{price}/月",
     "refreshAccount": "重新整理帳戶資料",
     "accountManagedByAdmin": "登入資料由管理員在客戶入口管理中維護。",

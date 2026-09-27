@@ -940,19 +940,6 @@ export default function PortalPage() {
                       <span>{t('portal.loginUsername')}</span>
                       <strong>{me.username}</strong>
                     </div>
-                    <div>
-                      <span>{t('portal.boundClients')}</span>
-                      <div className="portal-account-bindings">
-                        {portalBindings.map((binding) => (
-                          <Tag key={binding.email} color="blue">
-                            {binding.email} ·{' '}
-                            {t('portal.pricePerMonth', {
-                              price: formatCents(binding.pricePerMonthCents),
-                            })}
-                          </Tag>
-                        ))}
-                      </div>
-                    </div>
                   </div>
                   <div className="portal-account-actions">
                     <Button icon={<ReloadOutlined />} onClick={refresh}>
