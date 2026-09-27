@@ -245,8 +245,49 @@ func (s *SettingService) GetPortalSettings() (PortalSettings, error) {
 	return out, nil
 }
 
-// CreateCustomer creates a portal login bound to an existing client email.
+type CustomerBindingInput struct {
+	Email             string `json:"email"`
+	MonthlyPriceCents int64  `json:"monthlyPriceCents"`
+}
+
+func (s *ClientService) normalizeCustomerBindings(inputs []CustomerBindingInput) ([]CustomerBindingInput, error) {
+	if len(inputs) == 0 {
+		return nil, common.NewError("at least one client binding is required")
+	}
+	seen := make(map[string]struct{}, len(inputs))
+	out := make([]CustomerBindingInput, 0, len(inputs))
+	for _, input := range inputs {
+		email := strings.TrimSpace(input.Email)
+		if email == "" {
+			return nil, common.NewError("client email is required")
+		}
+		if input.MonthlyPriceCents <= 0 {
+			return nil, common.NewError("monthly price must be positive")
+		}
+		key := strings.ToLower(email)
+		if _, exists := seen[key]; exists {
+			return nil, common.NewError("the same client cannot be bound twice")
+		}
+		seen[key] = struct{}{}
+		if _, err := s.GetRecordByEmail(database.GetDB(), email); err != nil {
+			return nil, err
+		}
+		out = append(out, CustomerBindingInput{Email: email, MonthlyPriceCents: input.MonthlyPriceCents})
+	}
+	return out, nil
+}
+
+// CreateCustomer keeps the original one-binding service API for callers that
+// have not moved to the multi-binding admin form yet.
 func (s *ClientService) CreateCustomer(username, password, email string, monthlyPriceCents int64) (*model.CustomerAccount, error) {
+	return s.CreateCustomerWithBindings(username, password, []CustomerBindingInput{{
+		Email: email, MonthlyPriceCents: monthlyPriceCents,
+	}})
+}
+
+// CreateCustomerWithBindings creates one portal login with one or more priced
+// client bindings.
+func (s *ClientService) CreateCustomerWithBindings(username, password string, inputs []CustomerBindingInput) (*model.CustomerAccount, error) {
 	username = strings.TrimSpace(username)
 	if username == "" || len(username) > maxPortalUsername {
 		return nil, common.NewError("portal username is required (max 64 chars)")
@@ -254,66 +295,98 @@ func (s *ClientService) CreateCustomer(username, password, email string, monthly
 	if password == "" {
 		return nil, common.NewError("portal password is required")
 	}
-	email = strings.TrimSpace(email)
-	if email == "" {
-		return nil, common.NewError("client email is required")
-	}
-	if monthlyPriceCents <= 0 {
-		return nil, common.NewError("monthly price must be positive")
+	bindings, err := s.normalizeCustomerBindings(inputs)
+	if err != nil {
+		return nil, err
 	}
 	db := database.GetDB()
-	if _, err := s.GetRecordByEmail(db, email); err != nil {
-		return nil, err
-	}
-	var bound int64
-	if err := db.Model(&model.CustomerAccount{}).
-		Where("LOWER(email) = LOWER(?)", email).Count(&bound).Error; err != nil {
-		return nil, err
-	}
-	if bound > 0 {
-		return nil, common.NewError("client is already bound to a portal account")
+	for _, binding := range bindings {
+		var bound int64
+		if err := db.Model(&model.CustomerBinding{}).
+			Where("LOWER(email) = LOWER(?)", binding.Email).Count(&bound).Error; err != nil {
+			return nil, err
+		}
+		if bound > 0 {
+			return nil, common.NewError("client is already bound to a portal account:", binding.Email)
+		}
 	}
 	hash, err := crypto.HashPasswordAsBcrypt(password)
 	if err != nil {
 		return nil, err
 	}
 	acc := &model.CustomerAccount{
-		Username: username, PasswordHash: hash, Email: email,
-		MonthlyPriceCents: monthlyPriceCents, Enable: true,
+		Username: username, PasswordHash: hash, Email: bindings[0].Email,
+		MonthlyPriceCents: bindings[0].MonthlyPriceCents, Enable: true,
 	}
-	if err := db.Create(acc).Error; err != nil {
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(acc).Error; err != nil {
+			return err
+		}
+		rows := make([]model.CustomerBinding, 0, len(bindings))
+		for _, binding := range bindings {
+			rows = append(rows, model.CustomerBinding{
+				Username: username, Email: binding.Email, MonthlyPriceCents: binding.MonthlyPriceCents,
+			})
+		}
+		return tx.Create(&rows).Error
+	}); err != nil {
 		return nil, err
 	}
 	return acc, nil
 }
 
 func (s *ClientService) UpdateCustomerProfile(username, email string, monthlyPriceCents int64) error {
+	return s.UpdateCustomerBindings(username, []CustomerBindingInput{{
+		Email: email, MonthlyPriceCents: monthlyPriceCents,
+	}})
+}
+
+func (s *ClientService) UpdateCustomerBindings(username string, inputs []CustomerBindingInput) error {
 	username = strings.TrimSpace(username)
-	email = strings.TrimSpace(email)
-	if email == "" {
-		return common.NewError("client email is required")
-	}
-	if monthlyPriceCents <= 0 {
-		return common.NewError("monthly price must be positive")
+	bindings, err := s.normalizeCustomerBindings(inputs)
+	if err != nil {
+		return err
 	}
 	db := database.GetDB()
-	if _, err := s.GetRecordByEmail(db, email); err != nil {
-		return err
+	for _, binding := range bindings {
+		var bound int64
+		if err := db.Model(&model.CustomerBinding{}).
+			Where("LOWER(email) = LOWER(?) AND username <> ?", binding.Email, username).
+			Count(&bound).Error; err != nil {
+			return err
+		}
+		if bound > 0 {
+			return common.NewError("client is already bound to a portal account:", binding.Email)
+		}
 	}
-	var bound int64
-	if err := db.Model(&model.CustomerAccount{}).
-		Where("LOWER(email) = LOWER(?) AND username <> ?", email, username).
-		Count(&bound).Error; err != nil {
-		return err
-	}
-	if bound > 0 {
-		return common.NewError("client is already bound to a portal account")
-	}
-	return db.Model(&model.CustomerAccount{}).Where("username = ?", username).
-		Updates(map[string]any{
-			"email": email, "monthly_price_cents": monthlyPriceCents,
+	return db.Transaction(func(tx *gorm.DB) error {
+		var account model.CustomerAccount
+		if err := tx.Where("username = ?", username).First(&account).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("username = ?", username).Delete(&model.CustomerBinding{}).Error; err != nil {
+			return err
+		}
+		rows := make([]model.CustomerBinding, 0, len(bindings))
+		for _, binding := range bindings {
+			rows = append(rows, model.CustomerBinding{
+				Username: username, Email: binding.Email, MonthlyPriceCents: binding.MonthlyPriceCents,
+			})
+		}
+		if err := tx.Create(&rows).Error; err != nil {
+			return err
+		}
+		return tx.Model(&account).Updates(map[string]any{
+			"email": bindings[0].Email, "monthly_price_cents": bindings[0].MonthlyPriceCents,
 			"updated_at": time.Now().UnixMilli(),
 		}).Error
+	})
+}
+
+func (s *ClientService) GetCustomerBindings(username string) ([]model.CustomerBinding, error) {
+	var rows []model.CustomerBinding
+	err := database.GetDB().Where("username = ?", strings.TrimSpace(username)).Order("id ASC").Find(&rows).Error
+	return rows, err
 }
 
 // CheckCustomer verifies portal credentials, returning the account row.
@@ -483,6 +556,13 @@ func MatchCouponHash(presented string, hash string) bool {
 // expiry to max(now, current) + months. Unlimited-expiry (0) clients cannot
 // renew through the portal; an admin must change their plan instead.
 func (s *ClientService) RenewCustomer(inboundSvc *InboundService, username string, months int) (int64, int64, error) {
+	return s.RenewCustomerBinding(inboundSvc, username, "", months)
+}
+
+// RenewCustomerBinding charges and extends one client belonging to the portal
+// account. An empty email keeps the legacy behavior by selecting the first
+// binding.
+func (s *ClientService) RenewCustomerBinding(inboundSvc *InboundService, username, email string, months int) (int64, int64, error) {
 	if months < 1 || months > 120 {
 		return 0, 0, common.NewError("renew months must be 1-120")
 	}
@@ -499,7 +579,19 @@ func (s *ClientService) RenewCustomer(inboundSvc *InboundService, username strin
 	if !acc.Enable {
 		return 0, acc.BalanceCents, common.NewError("account is disabled")
 	}
-	price := acc.MonthlyPriceCents
+	var binding model.CustomerBinding
+	bindingQuery := db.Where("username = ?", acc.Username)
+	if strings.TrimSpace(email) != "" {
+		bindingQuery = bindingQuery.Where("LOWER(email) = LOWER(?)", strings.TrimSpace(email))
+	}
+	if err := bindingQuery.Order("id ASC").First(&binding).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, acc.BalanceCents, common.NewError("client is not bound to this account")
+		}
+		return 0, acc.BalanceCents, err
+	}
+	targetEmail := binding.Email
+	price := binding.MonthlyPriceCents
 	if price <= 0 {
 		var err error
 		price, err = (&SettingService{}).GetPortalPricePerMonthCents()
@@ -523,7 +615,12 @@ func (s *ClientService) RenewCustomer(inboundSvc *InboundService, username strin
 		if !locked.Enable {
 			return common.NewError("account is disabled")
 		}
-		rec, err := s.GetRecordByEmail(tx, locked.Email)
+		var lockedBinding model.CustomerBinding
+		if err := tx.Where("username = ? AND LOWER(email) = LOWER(?)", locked.Username, targetEmail).
+			First(&lockedBinding).Error; err != nil {
+			return err
+		}
+		rec, err := s.GetRecordByEmail(tx, lockedBinding.Email)
 		if err != nil {
 			return err
 		}
@@ -536,7 +633,7 @@ func (s *ClientService) RenewCustomer(inboundSvc *InboundService, username strin
 			base = now
 		}
 		newExpiry = time.UnixMilli(base).AddDate(0, months, 0).UnixMilli()
-		b, err := spendBalance(tx, &locked, cost, WalletKindRenew, "months")
+		b, err := spendBalance(tx, &locked, cost, WalletKindRenew, "renew:"+lockedBinding.Email)
 		if err != nil {
 			return err
 		}
@@ -546,7 +643,7 @@ func (s *ClientService) RenewCustomer(inboundSvc *InboundService, username strin
 	}); err != nil {
 		return 0, acc.BalanceCents, err
 	}
-	if _, err := s.ResetClientExpiryTimeByEmail(inboundSvc, acc.Email, newExpiry); err != nil {
+	if _, err := s.ResetClientExpiryTimeByEmail(inboundSvc, targetEmail, newExpiry); err != nil {
 		_ = db.Transaction(func(tx *gorm.DB) error {
 			var locked model.CustomerAccount
 			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
@@ -567,11 +664,11 @@ func (s *ClientService) RenewCustomer(inboundSvc *InboundService, username strin
 		return 0, balance, err
 	}
 	// Re-enable a client disabled by expiry/depletion when it is valid again.
-	if traffic, tErr := inboundSvc.GetClientTrafficByEmail(acc.Email); tErr == nil && traffic != nil && !traffic.Enable {
+	if traffic, tErr := inboundSvc.GetClientTrafficByEmail(targetEmail); tErr == nil && traffic != nil && !traffic.Enable {
 		stillExpired := newExpiry > 0 && newExpiry <= time.Now().UnixMilli()
 		stillDepleted := traffic.Total > 0 && traffic.Up+traffic.Down >= traffic.Total
 		if !stillExpired && !stillDepleted {
-			_, _, _ = s.BulkSetEnable(inboundSvc, []string{acc.Email}, true)
+			_, _, _ = s.BulkSetEnable(inboundSvc, []string{targetEmail}, true)
 		}
 	}
 	return newExpiry, balance, nil

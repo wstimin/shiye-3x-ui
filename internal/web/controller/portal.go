@@ -16,6 +16,7 @@ import (
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	gsessions "github.com/gorilla/sessions"
+	"gorm.io/gorm"
 )
 
 const portalSessionKey = "portal_user"
@@ -273,28 +274,46 @@ func portalAuthed(c *gin.Context) (string, string) {
 
 // me returns the customer's balance, expiry and traffic summary.
 func (a *PortalController) me(c *gin.Context) {
-	username, email := portalAuthed(c)
+	username, _ := portalAuthed(c)
 	var acc model.CustomerAccount
 	if err := database.GetDB().Where("username = ?", username).First(&acc).Error; err != nil {
 		jsonMsg(c, "", err)
 		return
 	}
-	traffic, err := a.inboundService.GetClientTrafficByEmail(email)
+	bindings, err := a.clientService.GetCustomerBindings(username)
 	if err != nil {
 		jsonMsg(c, "", err)
 		return
 	}
-	rec, err := a.clientService.GetRecordByEmail(database.GetDB(), email)
-	if err != nil {
-		jsonMsg(c, "", err)
-		return
+	items := make([]gin.H, 0, len(bindings))
+	var firstEmail string
+	var firstPrice, firstExpiry int64
+	var firstTraffic any
+	for _, binding := range bindings {
+		rec, recErr := a.clientService.GetRecordByEmail(database.GetDB(), binding.Email)
+		if recErr != nil {
+			continue
+		}
+		traffic, _ := a.inboundService.GetClientTrafficByEmail(binding.Email)
+		price := binding.MonthlyPriceCents
+		if price <= 0 {
+			price = a.customerMonthlyPrice(&acc)
+		}
+		items = append(items, gin.H{
+			"email": binding.Email, "pricePerMonthCents": price,
+			"expiryTime": rec.ExpiryTime, "traffic": traffic,
+		})
+		if firstEmail == "" {
+			firstEmail, firstPrice, firstExpiry, firstTraffic = binding.Email, price, rec.ExpiryTime, traffic
+		}
 	}
 	jsonObj(c, gin.H{
-		"username": username, "email": email,
+		"username": username, "email": firstEmail,
 		"balanceCents":       acc.BalanceCents,
-		"pricePerMonthCents": a.customerMonthlyPrice(&acc),
-		"expiryTime":         rec.ExpiryTime,
-		"traffic":            traffic,
+		"pricePerMonthCents": firstPrice,
+		"expiryTime":         firstExpiry,
+		"traffic":            firstTraffic,
+		"bindings":           items,
 	}, nil)
 }
 
@@ -308,6 +327,7 @@ func (a *PortalController) customerMonthlyPrice(acc *model.CustomerAccount) int6
 
 // portalNode is the whitelisted node view: no tag/port/listen/settings.
 type portalNode struct {
+	Email    string `json:"email"`
 	Remark   string `json:"remark"`
 	Protocol string `json:"protocol"`
 	Enable   bool   `json:"enable"`
@@ -319,32 +339,35 @@ type portalNode struct {
 
 // nodes lists the customer's own nodes with traffic.
 func (a *PortalController) nodes(c *gin.Context) {
-	_, email := portalAuthed(c)
-	rec, err := a.clientService.GetRecordByEmail(database.GetDB(), email)
+	username, _ := portalAuthed(c)
+	bindings, err := a.clientService.GetCustomerBindings(username)
 	if err != nil {
 		jsonMsg(c, "", err)
 		return
 	}
-	inboundIds, err := a.clientService.GetInboundIdsForEmail(database.GetDB(), email)
-	if err != nil {
-		jsonMsg(c, "", err)
-		return
-	}
-	out := make([]portalNode, 0, len(inboundIds))
-	for _, id := range inboundIds {
-		ib, err := a.inboundService.GetInbound(id)
-		if err != nil {
+	out := make([]portalNode, 0)
+	for _, binding := range bindings {
+		rec, recErr := a.clientService.GetRecordByEmail(database.GetDB(), binding.Email)
+		if recErr != nil {
 			continue
 		}
-		if !ib.Enable {
+		inboundIds, idsErr := a.clientService.GetInboundIdsForEmail(database.GetDB(), binding.Email)
+		if idsErr != nil {
 			continue
 		}
-		node := portalNode{Remark: ib.Remark, Protocol: string(ib.Protocol), Enable: true, Expiry: rec.ExpiryTime}
-		if t, err := a.inboundService.GetClientTrafficByEmail(email); err == nil && t != nil {
-			node.Enable = t.Enable
-			node.Up, node.Down, node.Total = t.Up, t.Down, t.Total
+		traffic, _ := a.inboundService.GetClientTrafficByEmail(binding.Email)
+		for _, id := range inboundIds {
+			ib, ibErr := a.inboundService.GetInbound(id)
+			if ibErr != nil || !ib.Enable {
+				continue
+			}
+			node := portalNode{Email: binding.Email, Remark: ib.Remark, Protocol: string(ib.Protocol), Enable: true, Expiry: rec.ExpiryTime}
+			if traffic != nil {
+				node.Enable = traffic.Enable
+				node.Up, node.Down, node.Total = traffic.Up, traffic.Down, traffic.Total
+			}
+			out = append(out, node)
 		}
-		out = append(out, node)
 	}
 	jsonObj(c, out, nil)
 }
@@ -352,14 +375,9 @@ func (a *PortalController) nodes(c *gin.Context) {
 // subLinks returns the customer's share links + raw/JSON/Clash sub URLs.
 // JSON/Clash URLs appear only when the admin enabled them (parity).
 func (a *PortalController) subLinks(c *gin.Context) {
-	_, email := portalAuthed(c)
+	username, _ := portalAuthed(c)
 	host := resolveHost(c)
-	links, err := a.inboundService.GetAllClientLinks(host, email)
-	if err != nil {
-		jsonMsg(c, "", err)
-		return
-	}
-	rec, err := a.clientService.GetRecordByEmail(database.GetDB(), email)
+	bindings, err := a.clientService.GetCustomerBindings(username)
 	if err != nil {
 		jsonMsg(c, "", err)
 		return
@@ -388,14 +406,44 @@ func (a *PortalController) subLinks(c *gin.Context) {
 		}
 		return join(base+basePath, id)
 	}
-	resp := gin.H{"links": links}
-	if subID := rec.SubID; subID != "" {
-		resp["subUrl"] = single(subURI, subPath, subID)
+	items := make([]gin.H, 0, len(bindings))
+	for _, binding := range bindings {
+		links, linkErr := a.inboundService.GetAllClientLinks(host, binding.Email)
+		if linkErr != nil {
+			continue
+		}
+		rec, recErr := a.clientService.GetRecordByEmail(database.GetDB(), binding.Email)
+		if recErr != nil {
+			continue
+		}
+		item := gin.H{"email": binding.Email, "links": links}
+		if subID := rec.SubID; subID != "" {
+			item["subUrl"] = single(subURI, subPath, subID)
+			if subJSONEnable {
+				item["subJsonUrl"] = single(subJSONURI, subJSONPath, subID)
+			}
+			if subClashEnable {
+				item["subClashUrl"] = single(subClashURI, subClashPath, subID)
+			}
+		}
+		items = append(items, item)
+	}
+	resp := gin.H{"subscriptions": items, "links": []string{}}
+	if len(items) > 0 {
+		first := items[0]
+		resp["links"] = first["links"]
+		if v, ok := first["subUrl"]; ok {
+			resp["subUrl"] = v
+		}
 		if subJSONEnable {
-			resp["subJsonUrl"] = single(subJSONURI, subJSONPath, subID)
+			if v, ok := first["subJsonUrl"]; ok {
+				resp["subJsonUrl"] = v
+			}
 		}
 		if subClashEnable {
-			resp["subClashUrl"] = single(subClashURI, subClashPath, subID)
+			if v, ok := first["subClashUrl"]; ok {
+				resp["subClashUrl"] = v
+			}
 		}
 	}
 	jsonObj(c, resp, nil)
@@ -447,7 +495,8 @@ func (a *PortalController) publicPlans(c *gin.Context) {
 }
 
 type renewForm struct {
-	Months int `json:"months"`
+	Months int    `json:"months"`
+	Email  string `json:"email"`
 }
 
 // renew extends the customer's expiry by calendar months, charged from balance.
@@ -458,7 +507,7 @@ func (a *PortalController) renew(c *gin.Context) {
 		jsonMsg(c, "", err)
 		return
 	}
-	newExpiry, balance, err := a.clientService.RenewCustomer(&a.inboundService, username, form.Months)
+	newExpiry, balance, err := a.clientService.RenewCustomerBinding(&a.inboundService, username, form.Email, form.Months)
 	if err != nil {
 		jsonMsg(c, "", err)
 		return
@@ -471,11 +520,12 @@ func (a *PortalController) renew(c *gin.Context) {
 // password hashes and coupon plaintext (hashes only, one-shot on create).
 
 type adminCustomerForm struct {
-	Username          string `json:"username"`
-	Password          string `json:"password"`
-	Email             string `json:"email"`
-	MonthlyPriceCents int64  `json:"monthlyPriceCents"`
-	Enable            *bool  `json:"enable"`
+	Username          string                         `json:"username"`
+	Password          string                         `json:"password"`
+	Email             string                         `json:"email"`
+	MonthlyPriceCents int64                          `json:"monthlyPriceCents"`
+	Enable            *bool                          `json:"enable"`
+	Bindings          []service.CustomerBindingInput `json:"bindings"`
 }
 
 // adminListCustomers returns portal logins (no password hashes) newest first.
@@ -487,10 +537,17 @@ func (a *PortalController) adminListCustomers(c *gin.Context) {
 	}
 	out := make([]gin.H, 0, len(rows))
 	for _, r := range rows {
+		bindings, _ := a.clientService.GetCustomerBindings(r.Username)
+		for i := range bindings {
+			if bindings[i].MonthlyPriceCents <= 0 {
+				bindings[i].MonthlyPriceCents = a.customerMonthlyPrice(&r)
+			}
+		}
 		out = append(out, gin.H{
 			"username": r.Username, "email": r.Email,
 			"balanceCents":      r.BalanceCents,
 			"monthlyPriceCents": a.customerMonthlyPrice(&r), "enable": r.Enable,
+			"bindings":  bindings,
 			"createdAt": r.CreatedAt, "updatedAt": r.UpdatedAt,
 		})
 	}
@@ -504,14 +561,18 @@ func (a *PortalController) adminCreateCustomer(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	acc, err := a.clientService.CreateCustomer(form.Username, form.Password, form.Email, form.MonthlyPriceCents)
+	bindings := form.Bindings
+	if len(bindings) == 0 && strings.TrimSpace(form.Email) != "" {
+		bindings = []service.CustomerBindingInput{{Email: form.Email, MonthlyPriceCents: form.MonthlyPriceCents}}
+	}
+	acc, err := a.clientService.CreateCustomerWithBindings(form.Username, form.Password, bindings)
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
 	jsonObj(c, gin.H{
 		"username": acc.Username, "email": acc.Email,
-		"monthlyPriceCents": acc.MonthlyPriceCents, "enable": acc.Enable,
+		"monthlyPriceCents": acc.MonthlyPriceCents, "enable": acc.Enable, "bindings": bindings,
 	}, nil)
 }
 
@@ -530,8 +591,12 @@ func (a *PortalController) adminUpdateCustomer(c *gin.Context) {
 			return
 		}
 	}
-	if strings.TrimSpace(form.Email) != "" || form.MonthlyPriceCents > 0 {
-		if err := a.clientService.UpdateCustomerProfile(username, form.Email, form.MonthlyPriceCents); err != nil {
+	if len(form.Bindings) > 0 || strings.TrimSpace(form.Email) != "" || form.MonthlyPriceCents > 0 {
+		bindings := form.Bindings
+		if len(bindings) == 0 {
+			bindings = []service.CustomerBindingInput{{Email: form.Email, MonthlyPriceCents: form.MonthlyPriceCents}}
+		}
+		if err := a.clientService.UpdateCustomerBindings(username, bindings); err != nil {
 			jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 			return
 		}
@@ -549,11 +614,18 @@ func (a *PortalController) adminUpdateCustomer(c *gin.Context) {
 func (a *PortalController) adminDeleteCustomer(c *gin.Context) {
 	username := strings.TrimSpace(c.Param("username"))
 	db := database.GetDB()
-	if err := db.Where("username = ?", username).Delete(&model.CustomerAccount{}).Error; err != nil {
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("username = ?", username).Delete(&model.CustomerBinding{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("username = ?", username).Delete(&model.WalletTxn{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("username = ?", username).Delete(&model.CustomerAccount{}).Error
+	}); err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	_ = db.Where("username = ?", username).Delete(&model.WalletTxn{}).Error
 	jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.inboundClientDeleteSuccess"), nil)
 }
 

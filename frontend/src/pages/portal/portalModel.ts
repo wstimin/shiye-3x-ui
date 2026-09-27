@@ -20,9 +20,24 @@ export interface PortalMe {
     enable: boolean;
     expiryTime: number;
   } | null;
+  bindings: PortalBinding[];
+}
+
+export interface PortalBinding {
+  email: string;
+  pricePerMonthCents: number;
+  expiryTime: number;
+  traffic: {
+    up: number;
+    down: number;
+    total: number;
+    enable: boolean;
+    expiryTime: number;
+  } | null;
 }
 
 export interface PortalNode {
+  email: string;
   remark: string;
   protocol: string;
   enable: boolean;
@@ -33,6 +48,15 @@ export interface PortalNode {
 }
 
 export interface PortalSubLinks {
+  links: string[];
+  subUrl?: string;
+  subJsonUrl?: string;
+  subClashUrl?: string;
+  subscriptions?: PortalSubscription[];
+}
+
+export interface PortalSubscription {
+  email: string;
   links: string[];
   subUrl?: string;
   subJsonUrl?: string;

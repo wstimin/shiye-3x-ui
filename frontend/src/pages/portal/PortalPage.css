@@ -1056,9 +1056,21 @@
 .x-user-center .portal-wallet-hero .ant-btn {
   border: 0;
   border-radius: 11px;
-  color: #1e5bc9;
+  color: #1e5bc9 !important;
   background: #fff;
   box-shadow: 0 8px 20px rgba(0, 44, 111, 0.16);
+}
+
+.x-user-center .portal-wallet-hero .ant-btn span,
+.x-user-center .portal-wallet-hero .ant-btn .anticon {
+  color: #1e5bc9 !important;
+}
+
+.x-user-center .portal-wallet-hero .ant-btn:hover,
+.x-user-center .portal-wallet-hero .ant-btn:hover span,
+.x-user-center .portal-wallet-hero .ant-btn:hover .anticon {
+  color: #174aa3 !important;
+  background: #f8fbff;
 }
 
 .x-user-center .portal-wallet-grid {
@@ -1270,6 +1282,18 @@
   white-space: nowrap;
 }
 
+.x-user-center .portal-account-bindings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.x-user-center .portal-account-bindings .ant-tag {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .x-user-center .portal-account-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1282,6 +1306,22 @@
 }
 
 /* Renew modal */
+.portal-renew-target {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 14px;
+  border: 1px solid #dce9fa;
+  border-radius: 14px;
+  background: #f8fbff;
+}
+
+.portal-renew-target > span {
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .portal-renew-custom {
   display: flex;
   align-items: center;
@@ -1295,6 +1335,32 @@
 .portal-renew-hint {
   margin: 16px 0 0;
   color: rgba(0, 0, 0, 0.58);
+}
+
+.portal-sub-qr {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 12px 0 8px;
+  text-align: center;
+}
+
+.portal-sub-qr .ant-qrcode {
+  padding: 14px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 12px 34px rgba(37, 99, 235, 0.12);
+}
+
+.portal-sub-qr strong {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: #17223b;
+}
+
+.portal-sub-qr > span {
+  color: #718096;
+  font-size: 12px;
 }
 
 /* Interaction and accessibility */

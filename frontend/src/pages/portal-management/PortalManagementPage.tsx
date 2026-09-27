@@ -50,6 +50,12 @@ interface CustomerRow {
   monthlyPriceCents: number;
   enable: boolean;
   createdAt: number;
+  bindings: CustomerBindingRow[];
+}
+
+interface CustomerBindingRow {
+  email: string;
+  monthlyPriceCents: number;
 }
 
 interface CouponRow {
@@ -87,8 +93,10 @@ interface BillingFormValues extends Omit<BillingValues, 'pricePerMonthCents'> {
 interface CustomerFormValues {
   username: string;
   password: string;
-  email: string;
-  monthlyPriceYuan: number;
+  bindings: Array<{
+    email: string;
+    monthlyPriceYuan: number;
+  }>;
 }
 
 interface ProviderFormValues {
@@ -260,8 +268,10 @@ export default function PortalManagementPage() {
     const payload = {
       username: values.username,
       password: values.password,
-      email: values.email,
-      monthlyPriceCents: yuanToCents(values.monthlyPriceYuan),
+      bindings: values.bindings.map((binding) => ({
+        email: binding.email,
+        monthlyPriceCents: yuanToCents(binding.monthlyPriceYuan),
+      })),
     };
     const endpoint = editingCustomer
       ? `/panel/api/portal/customers/${encodeURIComponent(editingCustomer.username)}`
@@ -283,8 +293,12 @@ export default function PortalManagementPage() {
     customerForm.setFieldsValue({
       username: '',
       password: '',
-      email: '',
-      monthlyPriceYuan: centsToYuan(billing.pricePerMonthCents) || 1,
+      bindings: [
+        {
+          email: '',
+          monthlyPriceYuan: centsToYuan(billing.pricePerMonthCents) || 1,
+        },
+      ],
     });
     setCustomerModalOpen(true);
   };
@@ -294,8 +308,13 @@ export default function PortalManagementPage() {
     customerForm.setFieldsValue({
       username: row.username,
       password: '',
-      email: row.email,
-      monthlyPriceYuan: centsToYuan(row.monthlyPriceCents),
+      bindings: (row.bindings?.length
+        ? row.bindings
+        : [{ email: row.email, monthlyPriceCents: row.monthlyPriceCents }]
+      ).map((binding) => ({
+        email: binding.email,
+        monthlyPriceYuan: centsToYuan(binding.monthlyPriceCents),
+      })),
     });
     setCustomerModalOpen(true);
   };
@@ -364,7 +383,14 @@ export default function PortalManagementPage() {
   };
 
   const boundByEmail = useMemo(
-    () => new Map(customers.map((customer) => [customer.email.toLowerCase(), customer.username])),
+    () =>
+      new Map(
+        customers.flatMap((customer) =>
+          (customer.bindings?.length ? customer.bindings : [{ email: customer.email }]).map(
+            (binding) => [binding.email.toLowerCase(), customer.username] as const,
+          ),
+        ),
+      ),
     [customers],
   );
   const clientSelectOptions = useMemo(
@@ -384,20 +410,20 @@ export default function PortalManagementPage() {
     { title: '登录用户', dataIndex: 'username', key: 'username' },
     {
       title: '绑定客户端',
-      dataIndex: 'email',
-      key: 'email',
-      render: (email: string) => (
-        <Space size={6}>
-          <Typography.Text copyable>{email}</Typography.Text>
-          <Tag color="blue">已绑定</Tag>
+      key: 'bindings',
+      render: (_, row) => (
+        <Space direction="vertical" size={5}>
+          {(row.bindings?.length
+            ? row.bindings
+            : [{ email: row.email, monthlyPriceCents: row.monthlyPriceCents }]
+          ).map((binding) => (
+            <Space key={binding.email} size={6} wrap>
+              <Typography.Text copyable>{binding.email}</Typography.Text>
+              <Tag color="blue">{money(binding.monthlyPriceCents)} / 月</Tag>
+            </Space>
+          ))}
         </Space>
       ),
-    },
-    {
-      title: '每月价格',
-      dataIndex: 'monthlyPriceCents',
-      key: 'monthlyPriceCents',
-      render: (v: number) => money(v),
     },
     { title: '余额', dataIndex: 'balanceCents', key: 'balance', render: (v: number) => money(v) },
     {
@@ -643,7 +669,7 @@ export default function PortalManagementPage() {
                       <Alert
                         type="info"
                         showIcon
-                        message="每个账号绑定一个现有客户端，并使用该账号自己的月费价格。"
+                        message="一个账号可以绑定多个现有客户端，每个客户端都能单独设置月费价格。"
                         style={{ marginBottom: 16 }}
                       />
                       <Table
@@ -805,6 +831,7 @@ export default function PortalManagementPage() {
         onOk={() => customerForm.submit()}
         okText={editingCustomer ? '保存' : '创建'}
         cancelText="取消"
+        width={720}
       >
         <Form form={customerForm} layout="vertical" onFinish={(v) => void saveCustomer(v)}>
           <Form.Item
@@ -821,33 +848,77 @@ export default function PortalManagementPage() {
           >
             <Input.Password />
           </Form.Item>
-          <Form.Item
-            label="绑定客户端邮箱（决定用户的节点和链接）"
-            name="email"
-            rules={[{ required: true, message: '请选择已存在的客户端' }]}
+          <Form.List
+            name="bindings"
+            rules={[
+              {
+                validator: async (_, bindings) => {
+                  if (!bindings?.length) throw new Error('至少绑定一个客户端');
+                },
+              },
+            ]}
           >
-            <Select
-              showSearch
-              loading={clientsLoading}
-              options={clientSelectOptions}
-              placeholder="搜索并选择后台已有客户端"
-              optionFilterProp="label"
-              notFoundContent={clientsLoading ? '正在加载客户端…' : '没有可绑定的客户端'}
-            />
-          </Form.Item>
-          <Form.Item
-            label="该客户每月价格（元）"
-            name="monthlyPriceYuan"
-            rules={[{ required: true, message: '请输入该客户的月费' }]}
-          >
-            <InputNumber
-              min={0.01}
-              precision={2}
-              step={0.01}
-              addonAfter="元/月"
-              style={{ width: '100%' }}
-            />
-          </Form.Item>
+            {(fields, { add, remove }, { errors }) => (
+              <div className="portal-binding-editor">
+                <div className="portal-binding-editor-heading">
+                  <Typography.Text strong>客户端绑定与月费</Typography.Text>
+                  <Button
+                    type="dashed"
+                    icon={<PlusOutlined />}
+                    onClick={() =>
+                      add({
+                        email: '',
+                        monthlyPriceYuan: centsToYuan(billing.pricePerMonthCents) || 1,
+                      })
+                    }
+                  >
+                    添加绑定
+                  </Button>
+                </div>
+                {fields.map((field, index) => (
+                  <div className="portal-binding-row" key={field.key}>
+                    <Form.Item
+                      label={index === 0 ? '绑定客户端' : undefined}
+                      name={[field.name, 'email']}
+                      rules={[{ required: true, message: '请选择客户端' }]}
+                    >
+                      <Select
+                        showSearch
+                        loading={clientsLoading}
+                        options={clientSelectOptions}
+                        placeholder="搜索并选择后台已有客户端"
+                        optionFilterProp="label"
+                        notFoundContent={clientsLoading ? '正在加载客户端…' : '没有可绑定的客户端'}
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label={index === 0 ? '每月价格' : undefined}
+                      name={[field.name, 'monthlyPriceYuan']}
+                      rules={[{ required: true, message: '请输入月费' }]}
+                    >
+                      <InputNumber
+                        min={0.01}
+                        precision={2}
+                        step={0.01}
+                        addonAfter="元/月"
+                        style={{ width: '100%' }}
+                      />
+                    </Form.Item>
+                    <Button
+                      className={index === 0 ? 'portal-binding-remove has-label' : 'portal-binding-remove'}
+                      type="text"
+                      danger
+                      icon={<DeleteOutlined />}
+                      aria-label="删除该绑定"
+                      disabled={fields.length === 1}
+                      onClick={() => remove(field.name)}
+                    />
+                  </div>
+                ))}
+                <Form.ErrorList errors={errors} />
+              </div>
+            )}
+          </Form.List>
         </Form>
       </Modal>
     </ConfigProvider>

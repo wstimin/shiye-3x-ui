@@ -86,6 +86,7 @@ func allModels() []any {
 		&model.OutboundSubscription{},
 		&model.SubBalancer{},
 		&model.CustomerAccount{},
+		&model.CustomerBinding{},
 		&model.CouponCode{},
 		&model.WalletTxn{},
 	}
@@ -129,6 +130,9 @@ func initModels() error {
 		}
 	}
 	if err := migrateCustomerMonthlyPrice(); err != nil {
+		return err
+	}
+	if err := migrateCustomerBindings(); err != nil {
 		return err
 	}
 	if err := dropLegacyInboundPortUnique(); err != nil {
@@ -202,6 +206,37 @@ func migrateCustomerMonthlyPrice() error {
 		return nil
 	}
 	return db.Exec("UPDATE customer_accounts SET monthly_price_cents = 0 WHERE monthly_price_cents IS NULL").Error
+}
+
+// migrateCustomerBindings preserves every existing one-client portal account
+// when upgrading to the multi-client binding table. It is intentionally
+// idempotent so interrupted upgrades can retry safely.
+func migrateCustomerBindings() error {
+	if !db.Migrator().HasTable(&model.CustomerAccount{}) || !db.Migrator().HasTable(&model.CustomerBinding{}) {
+		return nil
+	}
+	var accounts []model.CustomerAccount
+	if err := db.Where("email <> ''").Find(&accounts).Error; err != nil {
+		return err
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		for _, account := range accounts {
+			var count int64
+			if err := tx.Model(&model.CustomerBinding{}).
+				Where("username = ?", account.Username).Count(&count).Error; err != nil {
+				return err
+			}
+			if count > 0 {
+				continue
+			}
+			if err := tx.Create(&model.CustomerBinding{
+				Username: account.Username, Email: account.Email, MonthlyPriceCents: account.MonthlyPriceCents,
+			}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func postgresModelSettled(mdl any) bool {

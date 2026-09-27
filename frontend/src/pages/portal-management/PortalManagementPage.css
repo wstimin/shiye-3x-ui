@@ -105,6 +105,42 @@
   padding-top: 14px;
 }
 
+.portal-binding-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.portal-binding-editor-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 2px;
+}
+
+.portal-binding-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(190px, 0.7fr) 34px;
+  gap: 10px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 12px;
+  background: var(--background-color, #fafcff);
+}
+
+.portal-binding-row .ant-form-item {
+  margin-bottom: 0;
+}
+
+.portal-binding-remove {
+  margin-top: 0;
+}
+
+.portal-binding-remove.has-label {
+  margin-top: 30px;
+}
+
 @media (max-width: 700px) {
   .portal-management-heading,
   .portal-access-card .ant-card-body {
@@ -119,5 +155,17 @@
 
   .portal-management-tabs > .ant-tabs-nav .ant-tabs-nav-list {
     overflow-x: auto;
+  }
+
+  .portal-binding-row {
+    grid-template-columns: 1fr 42px;
+  }
+
+  .portal-binding-row .ant-form-item:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .portal-binding-remove.has-label {
+    margin-top: 30px;
   }
 }

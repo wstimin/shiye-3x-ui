@@ -178,8 +178,10 @@ type ApiToken struct {
 	ExpiresAt int64  `json:"expiresAt" gorm:"not null;default:0"`
 }
 
-// CustomerAccount is a portal login bound to one xray client via Email.
-// Balance is in cents; it only changes through the WalletTxn ledger.
+// CustomerAccount is a portal login. Client bindings live in
+// CustomerBinding so one login can manage and renew several clients.
+// Email and MonthlyPriceCents remain as a compatibility snapshot of the first
+// binding for older installations and API consumers.
 type CustomerAccount struct {
 	Id                int    `json:"id" gorm:"primaryKey;autoIncrement"`
 	Username          string `json:"username" gorm:"uniqueIndex;not null"`
@@ -194,6 +196,20 @@ type CustomerAccount struct {
 }
 
 func (CustomerAccount) TableName() string { return "customer_accounts" }
+
+// CustomerBinding associates one portal login with one xray client. The
+// monthly price belongs to the binding because a customer's clients can have
+// different renewal prices.
+type CustomerBinding struct {
+	Id                int    `json:"id" gorm:"primaryKey;autoIncrement"`
+	Username          string `json:"username" gorm:"index;not null"`
+	Email             string `json:"email" gorm:"uniqueIndex;not null"`
+	MonthlyPriceCents int64  `json:"monthlyPriceCents" gorm:"column:monthly_price_cents;not null"`
+	CreatedAt         int64  `json:"createdAt" gorm:"autoCreateTime:milli"`
+	UpdatedAt         int64  `json:"updatedAt" gorm:"autoUpdateTime:milli"`
+}
+
+func (CustomerBinding) TableName() string { return "customer_bindings" }
 
 // Coupon statuses: unused, used, disabled, expired.
 type CouponCode struct {

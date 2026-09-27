@@ -10,6 +10,7 @@ import {
   Layout,
   Modal,
   Progress,
+  QRCode,
   Select,
   Tabs,
   Tag,
@@ -76,6 +77,7 @@ interface RenewState {
   open: boolean;
   months: number;
   customMonths: number | null;
+  email: string;
 }
 
 type PortalSection = 'overview' | 'nodes' | 'wallet' | 'account';
@@ -120,7 +122,13 @@ export default function PortalPage() {
   const [redeeming, setRedeeming] = useState(false);
   const [renewing, setRenewing] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const [renew, setRenew] = useState<RenewState>({ open: false, months: 1, customMonths: 1 });
+  const [renew, setRenew] = useState<RenewState>({
+    open: false,
+    months: 1,
+    customMonths: 1,
+    email: '',
+  });
+  const [qrSubscription, setQrSubscription] = useState<{ title: string; url: string } | null>(null);
   const [activeSection, setActiveSection] = useState<PortalSection>('overview');
 
   const refresh = useCallback(async () => {
@@ -212,7 +220,26 @@ export default function PortalPage() {
   }, [redeemCode, messageApi, t, refresh]);
 
   const selectedMonths = renew.customMonths ?? renew.months;
-  const monthlyPrice = me?.pricePerMonthCents ?? plans?.pricePerMonthCents ?? 0;
+  const portalBindings = useMemo(
+    () =>
+      me?.bindings?.length
+        ? me.bindings
+        : me
+          ? [
+              {
+                email: me.email,
+                pricePerMonthCents: me.pricePerMonthCents,
+                expiryTime: me.expiryTime,
+                traffic: me.traffic,
+              },
+            ]
+          : [],
+    [me],
+  );
+  const selectedBinding =
+    portalBindings.find((binding) => binding.email === renew.email) ?? portalBindings[0];
+  const monthlyPrice =
+    selectedBinding?.pricePerMonthCents ?? me?.pricePerMonthCents ?? plans?.pricePerMonthCents ?? 0;
   const selectedCost = planCostCents(selectedMonths, monthlyPrice);
 
   const onRenew = useCallback(async () => {
@@ -220,7 +247,7 @@ export default function PortalPage() {
     try {
       const msg = await HttpUtil.post<{ expiryTime: number; balanceCents: number }>(
         '/portal/api/billing/renew',
-        { months: selectedMonths },
+        { months: selectedMonths, email: selectedBinding?.email ?? '' },
         JSON_POST_OPTIONS,
       );
       if (msg.success) {
@@ -233,7 +260,7 @@ export default function PortalPage() {
     } finally {
       setRenewing(false);
     }
-  }, [selectedMonths, messageApi, t, refresh]);
+  }, [selectedMonths, selectedBinding?.email, messageApi, t, refresh]);
 
   const onLogout = useCallback(async () => {
     await HttpUtil.post('/portal/api/auth/logout', {}, JSON_POST_OPTIONS);
@@ -284,51 +311,79 @@ export default function PortalPage() {
   }, [siteTitle]);
 
   const balance = me?.balanceCents ?? 0;
-  const totalUsed = (me?.traffic?.up ?? 0) + (me?.traffic?.down ?? 0);
-  const totalQuota = me?.traffic?.total ?? 0;
+  const totalUsed = portalBindings.reduce(
+    (sum, binding) => sum + (binding.traffic?.up ?? 0) + (binding.traffic?.down ?? 0),
+    0,
+  );
+  const totalQuota = portalBindings.reduce((sum, binding) => sum + (binding.traffic?.total ?? 0), 0);
   const runningNodes = nodes.filter((node) => node.enable).length;
-  const expireMs = me?.expiryTime ?? 0;
+  const finiteExpiries = portalBindings
+    .map((binding) => binding.expiryTime)
+    .filter((expiry) => expiry > 0);
+  const expireMs = finiteExpiries.length > 0 ? Math.min(...finiteExpiries) : 0;
   const daysLeft = expireMs > 0 ? Math.max(0, Math.ceil((expireMs - nowMs) / 86_400_000)) : null;
   const trafficPercent = usagePercent(totalUsed, totalQuota);
   const remainingTraffic = totalQuota > 0 ? Math.max(0, totalQuota - totalUsed) : 0;
 
+  const subscriptionItems = useMemo(
+    () =>
+      subs?.subscriptions?.length
+        ? subs.subscriptions
+        : subs
+          ? [
+              {
+                email: me?.email ?? '',
+                links: subs.links,
+                subUrl: subs.subUrl,
+                subJsonUrl: subs.subJsonUrl,
+                subClashUrl: subs.subClashUrl,
+              },
+            ]
+          : [],
+    [subs, me?.email],
+  );
+  const primarySubscription = subscriptionItems[0];
   const apps = useMemo(
     () =>
       buildSubApps({
-        subUrl: subs?.subUrl ?? '',
-        sId: me?.email ?? '',
+        subUrl: primarySubscription?.subUrl ?? '',
+        sId: primarySubscription?.email ?? '',
         subTitle: siteTitle,
       }),
-    [subs, me, siteTitle],
+    [primarySubscription, siteTitle],
   );
   const initialPlatform = detectPlatform(navigator.userAgent);
 
   const subRows = useMemo(() => {
-    if (!subs) return [];
-    return [
-      {
-        kind: 'SUB',
-        color: 'green',
-        url: subs.subUrl ?? '',
-        title: siteTitle,
-        downloadable: false,
-      },
-      {
-        kind: 'JSON',
-        color: 'purple',
-        url: subs.subJsonUrl ?? '',
-        title: `${siteTitle} JSON`,
-        downloadable: true,
-      },
-      {
-        kind: 'CLASH',
-        color: 'gold',
-        url: subs.subClashUrl ?? '',
-        title: 'Clash / Mihomo',
-        downloadable: true,
-      },
-    ].filter((row) => row.url);
-  }, [subs, siteTitle]);
+    return subscriptionItems.flatMap((subscription) =>
+      [
+        {
+          key: `${subscription.email}-SUB`,
+          kind: 'SUB',
+          color: 'green',
+          url: subscription.subUrl ?? '',
+          title: `${siteTitle} · ${subscription.email}`,
+          downloadable: false,
+        },
+        {
+          key: `${subscription.email}-JSON`,
+          kind: 'JSON',
+          color: 'purple',
+          url: subscription.subJsonUrl ?? '',
+          title: `${siteTitle} JSON · ${subscription.email}`,
+          downloadable: true,
+        },
+        {
+          key: `${subscription.email}-CLASH`,
+          kind: 'CLASH',
+          color: 'gold',
+          url: subscription.subClashUrl ?? '',
+          title: `Clash / Mihomo · ${subscription.email}`,
+          downloadable: true,
+        },
+      ].filter((row) => row.url),
+    );
+  }, [subscriptionItems, siteTitle]);
 
   const tabs = useMemo(() => {
     const items: NonNullable<TabsProps['items']> = [];
@@ -340,7 +395,7 @@ export default function PortalPage() {
         children: (
           <div className="sub-rows">
             {subRows.map((row) => (
-              <div key={row.kind} className="sub-row">
+              <div key={row.key} className="sub-row">
                 <Tag color={row.color} className="sub-row-tag">
                   {row.kind}
                 </Tag>
@@ -353,6 +408,12 @@ export default function PortalPage() {
                   </div>
                 </div>
                 <div className="sub-row-actions">
+                  <Button
+                    icon={<QrcodeOutlined />}
+                    onClick={() => setQrSubscription({ title: row.title, url: row.url })}
+                    aria-label="显示订阅二维码"
+                    title="显示订阅二维码"
+                  />
                   <Button
                     icon={<CopyOutlined />}
                     onClick={() => copy(row.url)}
@@ -376,7 +437,7 @@ export default function PortalPage() {
         ),
       });
     }
-    if (subs?.subUrl) {
+    if (primarySubscription?.subUrl) {
       items.push({
         key: 'apps',
         icon: <QrcodeOutlined />,
@@ -390,21 +451,22 @@ export default function PortalPage() {
         ),
       });
     }
-    if (subs && subs.links.length > 0) {
+    const configLinks = subscriptionItems.flatMap((subscription) => subscription.links || []);
+    if (configLinks.length > 0) {
       items.push({
         key: 'configs',
         icon: <UnorderedListOutlined />,
         label: (
           <>
             {t('subscription.tabConfigs')}
-            <span className="sub-tab-count">{subs.links.length}</span>
+            <span className="sub-tab-count">{configLinks.length}</span>
           </>
         ),
-        children: <SubConfigsTab links={subs.links} onCopy={copy} />,
+        children: <SubConfigsTab links={configLinks} onCopy={copy} />,
       });
     }
     return items;
-  }, [t, subRows, subs, apps, initialPlatform, copy]);
+  }, [t, subRows, primarySubscription?.subUrl, subscriptionItems, apps, initialPlatform, copy]);
 
   if (!booted) {
     return <PortalLoading />;
@@ -432,7 +494,7 @@ export default function PortalPage() {
 
   const nodeRows = (visibleNodes: PortalNode[]) =>
     visibleNodes.map((n) => (
-      <div key={`${n.protocol}-${n.remark}`} className="portal-node-row">
+      <div key={`${n.email}-${n.protocol}-${n.remark}`} className="portal-node-row">
         <span className="portal-node-icon">
           <ApiOutlined />
         </span>
@@ -440,7 +502,9 @@ export default function PortalPage() {
           <span className="portal-node-remark" dir="auto">
             {n.remark}
           </span>
-          <span className="portal-node-protocol">{n.protocol} · 加密连接</span>
+          <span className="portal-node-protocol">
+            {n.protocol} · {n.email}
+          </span>
         </div>
         {n.enable ? (
           <span className="portal-node-pulse">
@@ -626,7 +690,13 @@ export default function PortalPage() {
                         </Button>
                         <Button
                           icon={<ClockCircleOutlined />}
-                          onClick={() => setRenew((current) => ({ ...current, open: true }))}
+                          onClick={() =>
+                            setRenew((current) => ({
+                              ...current,
+                              open: true,
+                              email: current.email || portalBindings[0]?.email || '',
+                            }))
+                          }
                         >
                           {t('portal.renew')}
                         </Button>
@@ -784,7 +854,13 @@ export default function PortalPage() {
                     <Button
                       type="primary"
                       icon={<ClockCircleOutlined />}
-                      onClick={() => setRenew((current) => ({ ...current, open: true }))}
+                      onClick={() =>
+                        setRenew((current) => ({
+                          ...current,
+                          open: true,
+                          email: current.email || portalBindings[0]?.email || '',
+                        }))
+                      }
                     >
                       立即续期
                     </Button>
@@ -896,8 +972,14 @@ export default function PortalPage() {
                       <strong>{me.username}</strong>
                     </div>
                     <div>
-                      <span>绑定客户端邮箱</span>
-                      <strong>{me.email}</strong>
+                      <span>已绑定客户端</span>
+                      <div className="portal-account-bindings">
+                        {portalBindings.map((binding) => (
+                          <Tag key={binding.email} color="blue">
+                            {binding.email} · {formatCents(binding.pricePerMonthCents)}/月
+                          </Tag>
+                        ))}
+                      </div>
                     </div>
                   </div>
                   <div className="portal-account-actions">
@@ -926,6 +1008,19 @@ export default function PortalPage() {
         title={t('portal.renewTitle')}
         destroyOnHidden
       >
+        {portalBindings.length > 1 && (
+          <div className="portal-renew-target">
+            <span>选择续费客户端</span>
+            <Select
+              value={selectedBinding?.email}
+              options={portalBindings.map((binding) => ({
+                value: binding.email,
+                label: `${binding.email} · ${formatCents(binding.pricePerMonthCents)}/月`,
+              }))}
+              onChange={(email) => setRenew((current) => ({ ...current, email }))}
+            />
+          </div>
+        )}
         <div className="portal-renew-custom">
           <span>{t('portal.customDays')}</span>
           <InputNumber
@@ -938,11 +1033,32 @@ export default function PortalPage() {
           />
         </div>
         <p className="portal-renew-hint">
+          续费项目：{selectedBinding?.email || '—'}，月费 {formatCents(monthlyPrice)}。
+          <br />
           {t('portal.renewHint', {
             balance: formatCents(balance),
             cost: formatCents(selectedCost),
           })}
         </p>
+      </Modal>
+      <Modal
+        open={Boolean(qrSubscription)}
+        onCancel={() => setQrSubscription(null)}
+        footer={null}
+        centered
+        title="扫描订阅二维码"
+        destroyOnHidden
+      >
+        {qrSubscription && (
+          <div className="portal-sub-qr">
+            <QRCode value={qrSubscription.url} size={240} bordered={false} />
+            <strong>{qrSubscription.title}</strong>
+            <span>使用支持订阅导入的客户端扫描二维码</span>
+            <Button icon={<CopyOutlined />} onClick={() => copy(qrSubscription.url)}>
+              复制订阅链接
+            </Button>
+          </div>
+        )}
       </Modal>
     </ConfigProvider>
   );

@@ -1600,32 +1600,32 @@ export const sections: readonly Section[] = [
     id: 'portal',
     title: 'Customer Portal',
     description:
-      'Customer self-service portal: admin-managed logins bound to client emails, pure-amount recharge codes, and balance-charged renewal. Logins are per-client username+password pairs; codes carry only an amount and redeem into balance. Portal sessions use a separate cookie from the admin session.',
+      'Customer self-service portal: admin-managed logins with one or more priced client bindings, pure-amount recharge codes, and balance-charged renewal. Codes carry only an amount and redeem into balance. Portal sessions use a separate cookie from the admin session.',
     endpoints: [
       {
         method: 'GET',
         path: '/panel/api/portal/customers',
         summary:
-          'List portal logins newest first. Responses carry username, bound client email, balance, per-customer monthly price and enable flag — never password hashes.',
+          'List portal logins newest first. Responses include every client binding and its own monthly price — never password hashes.',
         response:
-          '{\n  "success": true,\n  "obj": [\n    { "username": "alice", "email": "alice@example.com", "balanceCents": 500, "monthlyPriceCents": 2000, "enable": true }\n  ]\n}',
+          '{\n  "success": true,\n  "obj": [\n    { "username": "alice", "balanceCents": 500, "enable": true, "bindings": [{ "email": "alice@example.com", "monthlyPriceCents": 2000 }] }\n  ]\n}',
       },
       {
         method: 'POST',
         path: '/panel/api/portal/customers',
         summary:
-          'Bind a portal login and its own monthly price to an existing unbound client email. The username must be unique.',
-        body: '{\n  "username": "alice",\n  "password": "s3cret",\n  "email": "alice@example.com",\n  "monthlyPriceCents": 2000\n}',
+          'Create a portal login with one or more existing unbound clients. Each binding has its own monthly price.',
+        body: '{\n  "username": "alice",\n  "password": "s3cret",\n  "bindings": [\n    { "email": "alice@example.com", "monthlyPriceCents": 2000 },\n    { "email": "alice-mobile@example.com", "monthlyPriceCents": 1200 }\n  ]\n}',
         response:
-          '{\n  "success": true,\n  "obj": { "username": "alice", "email": "alice@example.com", "monthlyPriceCents": 2000, "enable": true }\n}',
+          '{\n  "success": true,\n  "obj": { "username": "alice", "enable": true, "bindings": [{ "email": "alice@example.com", "monthlyPriceCents": 2000 }] }\n}',
       },
       {
         method: 'POST',
         path: '/panel/api/portal/customers/:username',
         summary:
-          'Update the bound client, per-customer monthly price, password and/or enable switch. A password change bumps the login epoch so live portal sessions drop.',
+          'Replace the priced client bindings and/or update password and enable state. A password change bumps the login epoch so live portal sessions drop.',
         params: [{ name: 'username', in: 'path', type: 'string', desc: 'Portal username.' }],
-        body: '{\n  "email": "alice@example.com",\n  "monthlyPriceCents": 2500,\n  "password": "new-secret",\n  "enable": true\n}',
+        body: '{\n  "bindings": [{ "email": "alice@example.com", "monthlyPriceCents": 2500 }],\n  "password": "new-secret",\n  "enable": true\n}',
       },
       {
         method: 'POST',
