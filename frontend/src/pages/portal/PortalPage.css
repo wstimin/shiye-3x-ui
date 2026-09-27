@@ -1380,30 +1380,211 @@
   color: rgba(0, 0, 0, 0.58);
 }
 
+.portal-qr-modal .ant-modal-content {
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid rgba(134, 164, 205, 0.22);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 92% 5%, rgba(95, 207, 222, 0.18), transparent 31%),
+    linear-gradient(155deg, #f8fbff 0%, #ffffff 54%, #f5f3ff 100%);
+  box-shadow: 0 30px 80px rgba(31, 58, 105, 0.2);
+}
+
+.portal-qr-modal .ant-modal-header {
+  margin: 0;
+  padding: 22px 24px 15px;
+  background: transparent;
+}
+
+.portal-qr-modal .ant-modal-body {
+  padding: 0 24px 24px;
+}
+
+.portal-qr-modal .ant-modal-close {
+  inset-block-start: 18px;
+  inset-inline-end: 18px;
+  border-radius: 10px;
+}
+
+.portal-qr-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.portal-qr-modal-title > span {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  color: #fff;
+  background: linear-gradient(145deg, #2563eb, #7c3aed);
+  box-shadow: 0 9px 22px rgba(62, 91, 205, 0.22);
+  font-size: 19px;
+}
+
+.portal-qr-modal-title > div {
+  display: grid;
+  gap: 2px;
+}
+
+.portal-qr-modal-title strong {
+  color: #17223b;
+  font-size: 16px;
+}
+
+.portal-qr-modal-title small {
+  color: #7a8799;
+  font-size: 12px;
+  font-weight: 500;
+}
+
 .portal-sub-qr {
   display: grid;
   justify-items: center;
-  gap: 12px;
-  padding: 12px 0 8px;
+  gap: 14px;
   text-align: center;
 }
 
-.portal-sub-qr .ant-qrcode {
-  padding: 14px;
-  border-radius: 18px;
-  background: #fff;
-  box-shadow: 0 12px 34px rgba(37, 99, 235, 0.12);
+.portal-sub-qr-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid rgba(22, 163, 139, 0.16);
+  border-radius: 999px;
+  color: #0f766e;
+  background: rgba(204, 251, 241, 0.58);
+  font-size: 12px;
+  font-weight: 750;
 }
 
-.portal-sub-qr strong {
+.portal-sub-qr-frame {
+  position: relative;
+  padding: 14px;
+  border: 1px solid rgba(103, 126, 188, 0.18);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow:
+    0 20px 45px rgba(37, 99, 235, 0.13),
+    inset 0 0 0 6px rgba(238, 244, 255, 0.85);
+}
+
+.portal-sub-qr-frame::before,
+.portal-sub-qr-frame::after,
+.portal-sub-qr-frame > i::before,
+.portal-sub-qr-frame > i::after {
+  position: absolute;
+  width: 27px;
+  height: 27px;
+  border-color: #4f70e8;
+  border-style: solid;
+  content: '';
+  pointer-events: none;
+}
+
+.portal-sub-qr-frame::before {
+  top: 7px;
+  left: 7px;
+  border-width: 2px 0 0 2px;
+  border-radius: 9px 0 0;
+}
+
+.portal-sub-qr-frame::after {
+  top: 7px;
+  right: 7px;
+  border-width: 2px 2px 0 0;
+  border-radius: 0 9px 0 0;
+}
+
+.portal-sub-qr-frame > i::before {
+  bottom: 7px;
+  left: 7px;
+  border-width: 0 0 2px 2px;
+  border-radius: 0 0 0 9px;
+}
+
+.portal-sub-qr-frame > i::after {
+  right: 7px;
+  bottom: 7px;
+  border-width: 0 2px 2px 0;
+  border-radius: 0 0 9px;
+}
+
+.portal-sub-qr-frame .ant-qrcode {
+  border-radius: 14px;
+  background: #fff;
+}
+
+.portal-sub-qr-copy {
+  display: grid;
+  gap: 5px;
+  max-width: 100%;
+}
+
+.portal-sub-qr-copy strong {
   max-width: 100%;
   overflow-wrap: anywhere;
   color: #17223b;
+  font-size: 15px;
 }
 
-.portal-sub-qr > span {
+.portal-sub-qr-copy span {
   color: #718096;
   font-size: 12px;
+}
+
+.portal-sub-qr-link {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #dce7f5;
+  border-radius: 12px;
+  color: #51637c;
+  background: rgba(245, 249, 255, 0.82);
+  text-align: left;
+}
+
+.portal-sub-qr-link .anticon {
+  flex: 0 0 auto;
+  color: #4f70e8;
+}
+
+.portal-sub-qr-link span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.portal-sub-qr .ant-btn-primary {
+  height: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(105deg, #2563eb, #6554df);
+  box-shadow: 0 10px 24px rgba(63, 81, 197, 0.22);
+  font-weight: 700;
+}
+
+@media (max-width: 480px) {
+  .portal-qr-modal .ant-modal-header {
+    padding-inline: 18px;
+  }
+
+  .portal-qr-modal .ant-modal-body {
+    padding: 0 18px 20px;
+  }
+
+  .portal-sub-qr-frame {
+    transform: scale(0.94);
+    margin-block: -7px;
+  }
 }
 
 /* Interaction and accessibility */

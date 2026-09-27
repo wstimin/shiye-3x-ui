@@ -1049,19 +1049,57 @@ export default function PortalPage() {
         </p>
       </Modal>
       <Modal
+        rootClassName="portal-qr-modal"
         open={Boolean(qrSubscription)}
         onCancel={() => setQrSubscription(null)}
         footer={null}
         centered
-        title="扫描订阅二维码"
+        width={420}
+        title={
+          <div className="portal-qr-modal-title">
+            <span>
+              <QrcodeOutlined />
+            </span>
+            <div>
+              <strong>订阅二维码</strong>
+              <small>扫码快速导入客户端</small>
+            </div>
+          </div>
+        }
         destroyOnHidden
       >
         {qrSubscription && (
           <div className="portal-sub-qr">
-            <QRCode value={qrSubscription.url} size={240} bordered={false} />
-            <strong>{qrSubscription.title}</strong>
-            <span>使用支持订阅导入的客户端扫描二维码</span>
-            <Button icon={<CopyOutlined />} onClick={() => copy(qrSubscription.url)}>
+            <div className="portal-sub-qr-badge">
+              <SafetyCertificateFilled />
+              安全订阅
+            </div>
+            <div className="portal-sub-qr-frame">
+              <i aria-hidden="true" />
+              <QRCode
+                value={qrSubscription.url}
+                size={224}
+                color="#172554"
+                bgColor="#ffffff"
+                bordered={false}
+                errorLevel="H"
+              />
+            </div>
+            <div className="portal-sub-qr-copy">
+              <strong>{qrSubscription.title}</strong>
+              <span>使用支持订阅导入的客户端扫描上方二维码</span>
+            </div>
+            <div className="portal-sub-qr-link">
+              <LinkOutlined />
+              <span>{qrSubscription.url}</span>
+            </div>
+            <Button
+              type="primary"
+              size="large"
+              block
+              icon={<CopyOutlined />}
+              onClick={() => copy(qrSubscription.url)}
+            >
               复制订阅链接
             </Button>
           </div>

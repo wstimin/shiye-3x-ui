@@ -1,5 +1,8 @@
 .portal-management-content {
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
   gap: 18px;
 }
 
