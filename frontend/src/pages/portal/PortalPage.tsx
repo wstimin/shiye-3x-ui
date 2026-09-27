@@ -467,7 +467,7 @@ export default function PortalPage() {
   const metrics = [
     {
       key: 'balance',
-      label: '账户余额',
+      label: t('portal.balance'),
       value: formatCents(balance),
       hint: '可用于节点续期',
       icon: <WalletOutlined />,
@@ -628,7 +628,7 @@ export default function PortalPage() {
                           icon={<ClockCircleOutlined />}
                           onClick={() => setRenew((current) => ({ ...current, open: true }))}
                         >
-                          余额续期
+                          {t('portal.renew')}
                         </Button>
                       </div>
                     </div>
