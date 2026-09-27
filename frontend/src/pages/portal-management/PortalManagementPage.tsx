@@ -827,11 +827,11 @@ export default function PortalManagementPage() {
                   key: 'provider',
                   label: '第三方卡密接口',
                   children: (
-                    <Card className="portal-management-card" title="第三方卡密系统接口预留">
+                    <Card className="portal-management-card" title="KMGLXT 第三方卡密接口">
                       <Alert
                         type="info"
                         showIcon
-                        message="这里只保存接口配置，具体协议由你的卡密系统适配。密钥留空表示保持原值。"
+                        message="已支持 KMGLXT 签名验卡和激活。这里只接受金额卡，兑换成功后按卡面额充值余额；App Key 和 App Secret 留空表示保持原值。"
                         style={{ marginBottom: 16 }}
                       />
                       <Space wrap style={{ marginBottom: 16 }}>
@@ -839,10 +839,10 @@ export default function PortalManagementPage() {
                           接口地址{billing.cardProviderUrl ? '已保存' : '未配置'}
                         </Tag>
                         <Tag color={billing.cardProviderSecretConfigured ? 'green' : 'default'}>
-                          Secret{billing.cardProviderSecretConfigured ? '已保存' : '未配置'}
+                          App Key{billing.cardProviderSecretConfigured ? '已保存' : '未配置'}
                         </Tag>
                         <Tag color={billing.cardProviderSignConfigured ? 'green' : 'default'}>
-                          签名密钥{billing.cardProviderSignConfigured ? '已保存' : '未配置'}
+                          App Secret{billing.cardProviderSignConfigured ? '已保存' : '未配置'}
                         </Tag>
                       </Space>
                       <Form
@@ -850,17 +850,21 @@ export default function PortalManagementPage() {
                         layout="vertical"
                         onFinish={(v) => void saveBilling({}, v)}
                       >
-                        <Form.Item label="卡密接口地址" name="cardProviderUrl">
-                          <Input placeholder="https://example.com/api" />
+                        <Form.Item
+                          label="KMGLXT 服务地址"
+                          name="cardProviderUrl"
+                          extra="填写卡密系统的基础地址，例如 https://card.example.com；也兼容填写 /api 或完整验卡接口地址。"
+                        >
+                          <Input placeholder="https://card.example.com" />
                         </Form.Item>
                         <Row gutter={16}>
                           <Col xs={24} md={12}>
-                            <Form.Item label="接口 Secret" name="cardProviderSecret">
+                            <Form.Item label="App Key" name="cardProviderSecret">
                               <Input.Password placeholder="留空保持原值" />
                             </Form.Item>
                           </Col>
                           <Col xs={24} md={12}>
-                            <Form.Item label="签名密钥" name="cardProviderSign">
+                            <Form.Item label="App Secret" name="cardProviderSign">
                               <Input.Password placeholder="留空保持原值" />
                             </Form.Item>
                           </Col>

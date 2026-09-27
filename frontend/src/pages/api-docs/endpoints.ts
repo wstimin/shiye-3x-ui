@@ -1669,7 +1669,7 @@ export const sections: readonly Section[] = [
         path: '/panel/api/portal/billing',
         summary:
           'Persist the isolated portal listener, public address, legacy default monthly price, branding, the separate purchase URL and optional third-party card-system fields. Listener changes schedule a panel restart. Secrets are write-only.',
-        body: '{\n  "portalEnabled": true,\n  "portalListen": "0.0.0.0",\n  "portalPort": 2054,\n  "portalPublicUrl": "https://user.example.com/portal",\n  "pricePerMonthCents": 2000,\n  "plans": "[1,3,6]",\n  "purchaseUrl": "https://shop.example.com/codes",\n  "siteTitle": "X用户中心",\n  "cardProviderUrl": "https://cards.example.com/api",\n  "cardProviderSecret": "server-secret",\n  "cardProviderSign": "sign-key"\n}',
+        body: '{\n  "portalEnabled": true,\n  "portalListen": "0.0.0.0",\n  "portalPort": 2054,\n  "portalPublicUrl": "https://user.example.com/portal",\n  "pricePerMonthCents": 2000,\n  "plans": "[1,3,6]",\n  "purchaseUrl": "https://shop.example.com/codes",\n  "siteTitle": "X用户中心",\n  "cardProviderUrl": "https://card.example.com",\n  "cardProviderSecret": "kmglxt-app-key",\n  "cardProviderSign": "kmglxt-app-secret"\n}',
       },
     ],
   },

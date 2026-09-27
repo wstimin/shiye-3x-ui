@@ -461,7 +461,14 @@ func (a *PortalController) redeem(c *gin.Context) {
 		jsonMsg(c, "", err)
 		return
 	}
-	balance, err := a.clientService.RedeemCoupon(username, form.Code)
+	settings, err := a.settingService.GetPortalSettings()
+	if err != nil {
+		jsonMsg(c, "", err)
+		return
+	}
+	balance, err := a.clientService.RedeemCouponWithProvider(c.Request.Context(), username, form.Code, service.KMGLXTConfig{
+		BaseURL: settings.CardProviderURL, AppKey: settings.CardProviderSecret, AppSecret: settings.CardProviderSign,
+	})
 	if err != nil {
 		jsonMsg(c, "", err)
 		return

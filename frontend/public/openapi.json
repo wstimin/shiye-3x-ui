@@ -10727,9 +10727,9 @@
                 "plans": "[1,3,6]",
                 "purchaseUrl": "https://shop.example.com/codes",
                 "siteTitle": "X用户中心",
-                "cardProviderUrl": "https://cards.example.com/api",
-                "cardProviderSecret": "server-secret",
-                "cardProviderSign": "sign-key"
+                "cardProviderUrl": "https://card.example.com",
+                "cardProviderSecret": "kmglxt-app-key",
+                "cardProviderSign": "kmglxt-app-secret"
               }
             }
           }

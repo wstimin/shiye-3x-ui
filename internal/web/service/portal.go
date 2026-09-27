@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -517,6 +518,105 @@ func (s *ClientService) RedeemCoupon(username, code string) (int64, error) {
 		return 0, err
 	}
 	return balance, nil
+}
+
+// RedeemCouponWithProvider preserves local coupons and falls back to KMGLXT
+// only when the presented code does not exist in the local coupon table.
+func (s *ClientService) RedeemCouponWithProvider(ctx context.Context, username, code string, config KMGLXTConfig) (int64, error) {
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return 0, common.NewError("请输入卡密")
+	}
+
+	db := database.GetDB()
+	var local model.CouponCode
+	err := db.Where("code_hash = ?", crypto.HashTokenSHA256(code)).First(&local).Error
+	if err == nil {
+		return s.RedeemCoupon(username, code)
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return 0, err
+	}
+
+	// Validate the target account before consuming a card at the provider.
+	var account model.CustomerAccount
+	if err := db.Where("username = ?", strings.TrimSpace(username)).First(&account).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, common.NewError("客户账号不存在")
+		}
+		return 0, err
+	}
+	if !account.Enable {
+		return 0, common.NewError("客户账号已停用")
+	}
+	externalCode := strings.ToUpper(code)
+	var alreadyRedeemed model.CouponCode
+	err = db.Where("code_hash = ?", crypto.HashTokenSHA256(externalCode)).First(&alreadyRedeemed).Error
+	if err == nil {
+		return 0, common.NewError("该卡密已经充值过")
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return 0, err
+	}
+
+	amountCents, providerCard, err := RedeemKMGLXTMoneyCard(ctx, config, externalCode)
+	if err != nil {
+		return 0, err
+	}
+	return s.creditExternalCoupon(username, providerCard, amountCents)
+}
+
+func (s *ClientService) creditExternalCoupon(username, code string, amountCents int64) (int64, error) {
+	if amountCents <= 0 {
+		return 0, common.NewError("第三方卡密金额无效")
+	}
+	var balance int64
+	err := database.GetDB().Transaction(func(tx *gorm.DB) error {
+		var account model.CustomerAccount
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("username = ?", strings.TrimSpace(username)).First(&account).Error; err != nil {
+			return err
+		}
+		if !account.Enable {
+			return common.NewError("客户账号已停用")
+		}
+
+		hash := crypto.HashTokenSHA256(code)
+		var existing model.CouponCode
+		findErr := tx.Where("code_hash = ?", hash).First(&existing).Error
+		if findErr == nil {
+			return common.NewError("该卡密已经充值过")
+		}
+		if !errors.Is(findErr, gorm.ErrRecordNotFound) {
+			return findErr
+		}
+
+		now := time.Now().UnixMilli()
+		coupon := model.CouponCode{
+			CodeHash: hash, AmountCents: amountCents, Status: CouponStatusUsed,
+			BatchNo: kmglxtProviderBatch, Source: kmglxtProviderSource,
+			UsedBy: account.Username, UsedAt: now,
+		}
+		if err := tx.Create(&coupon).Error; err != nil {
+			return err
+		}
+		balance = account.BalanceCents + amountCents
+		if balance < account.BalanceCents {
+			return common.NewError("余额超出支持范围")
+		}
+		if err := tx.Model(&account).Updates(map[string]any{
+			"balance_cents": balance,
+			"updated_at":    now,
+		}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&model.WalletTxn{
+			Username: account.Username, Kind: WalletKindRedeem,
+			AmountCents: amountCents, BalanceAfter: balance,
+			Ref: providerReference(code),
+		}).Error
+	})
+	return balance, err
 }
 
 // SpendBalance deducts cents and appends the ledger row inside caller's tx.
