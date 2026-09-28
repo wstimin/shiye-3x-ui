@@ -3686,7 +3686,7 @@ write_reverse_proxy_snippet() {
     # `install` is also the name of this script's panel-install function.
     # Bypass shell functions so these are filesystem operations, never a panel
     # reinstall/download.
-    command install -d -m 755 /etc/nginx/snippets /var/www/3x-ui-acme/.well-known/acme-challenge
+    command install -d -m 755 /etc/nginx/snippets
     cat > /etc/nginx/snippets/3x-ui-reverse-proxy.conf <<'EOF'
 proxy_http_version 1.1;
 proxy_set_header Upgrade $http_upgrade;
@@ -3817,14 +3817,13 @@ ensure_reverse_proxy_certificate() {
     mkdir -p "$cert_dir"
     "$acme_bin" --set-default-ca --server letsencrypt --force > /dev/null 2>&1
     echo -e "${yellow}正在使用 Nginx 模式验证域名并申请证书：${domain}${plain}"
-    # Nginx mode temporarily injects the HTTP-01 route into the virtual host
-    # that is actually serving this domain, then restores that file.  This is
-    # more reliable than a fixed webroot when an older same-domain vhost is
-    # already active: the latter wins Nginx's server-name selection and turns
-    # an otherwise valid challenge request into a misleading 404.
+    # Nginx mode temporarily injects and later removes its own HTTP-01
+    # location.  The generated virtual hosts must not declare that location:
+    # doing so creates a duplicate location while acme.sh validates nginx and
+    # aborts issuance before the CA can reach this server.
     if ! PATH="$(dirname "$REVERSE_PROXY_NGINX_BIN"):${PATH}" "$acme_bin" --issue -d "$domain" --nginx --server letsencrypt --force; then
         if [[ ! -s /root/.acme.sh/${domain}_ecc/fullchain.cer && ! -s /root/.acme.sh/${domain}/fullchain.cer ]]; then
-            echo -e "${red}证书申请失败。域名验证没有通过，X-UI 本体未被下载或重装。${plain}"
+            echo -e "${red}证书申请失败。请根据上方 acme.sh 输出检查具体原因；X-UI 本体未被下载或重装。${plain}"
             show_reverse_proxy_domain_matches "$domain"
             echo -e "${yellow}请确认域名只解析到本机，并且公网 80 端口能够访问当前 Nginx。${plain}"
             return 1
@@ -3886,7 +3885,6 @@ customer_portal_proxy_menu() {
 server {
     listen 80;
     server_name ${portal_domain};
-    location ^~ /.well-known/acme-challenge/ { root /var/www/3x-ui-acme; default_type text/plain; try_files \$uri =404; }
     location = / { return 302 /portal; }
     location = /portal { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-reverse-proxy.conf; }
     location ^~ /portal/ { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-reverse-proxy.conf; }
@@ -3909,7 +3907,6 @@ EOF
 server {
     listen 80;
     server_name ${portal_domain};
-    location ^~ /.well-known/acme-challenge/ { root /var/www/3x-ui-acme; default_type text/plain; try_files \$uri =404; }
     location / { return 301 https://\$host\$request_uri; }
 }
 server {
@@ -3985,7 +3982,6 @@ admin_panel_proxy_menu() {
 server {
     listen 80;
     server_name ${panel_domain};
-    location ^~ /.well-known/acme-challenge/ { root /var/www/3x-ui-acme; default_type text/plain; try_files \$uri =404; }
     location / { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-reverse-proxy.conf; }
 }
 EOF
@@ -4004,7 +4000,6 @@ EOF
 server {
     listen 80;
     server_name ${panel_domain};
-    location ^~ /.well-known/acme-challenge/ { root /var/www/3x-ui-acme; default_type text/plain; try_files \$uri =404; }
     location / { return 301 https://\$host\$request_uri; }
 }
 server {
