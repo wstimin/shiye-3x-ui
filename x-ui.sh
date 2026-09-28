@@ -3441,7 +3441,7 @@ customer_portal_menu() {
         read -rp "请输入选项 [0-5]: " portal_choice
         case "$portal_choice" in
             1)
-                local settings host portal_port portal_enabled portal_public_url scheme response proxy_domain proxy_scheme portal_conf admin_conf
+                local settings host portal_port portal_enabled portal_public_url scheme response proxy_domain proxy_scheme portal_conf admin_conf sub_port sub_uri sub_json_uri sub_clash_uri
                 settings=$(${xui_folder}/x-ui setting -show true 2>/dev/null)
                 host=""
                 for ip_address in "https://api4.ipify.org" "https://ipv4.icanhazip.com" "https://4.ident.me"; do
@@ -3452,7 +3452,12 @@ customer_portal_menu() {
                 portal_port=$(echo "$settings" | awk -F': ' '/^portalPort:/{print $2}' | tr -d '[:space:]')
                 portal_enabled=$(echo "$settings" | awk -F': ' '/^portalEnabled:/{print $2}' | tr -d '[:space:]')
                 portal_public_url=$(echo "$settings" | sed -n 's/^portalPublicUrl:[[:space:]]*//p' | head -n 1)
+                sub_port=$(echo "$settings" | awk -F': ' '/^subPort:/{print $2}' | tr -d '[:space:]')
+                sub_uri=$(echo "$settings" | sed -n 's/^subURI:[[:space:]]*//p' | head -n 1)
+                sub_json_uri=$(echo "$settings" | sed -n 's/^subJsonURI:[[:space:]]*//p' | head -n 1)
+                sub_clash_uri=$(echo "$settings" | sed -n 's/^subClashURI:[[:space:]]*//p' | head -n 1)
                 portal_port="${portal_port:-2054}"
+                sub_port="${sub_port:-2096}"
                 scheme="http"
                 echo "$settings" | grep -qE '^(certFile|keyFile): .+' && scheme="https"
                 if [[ "$portal_enabled" == "false" ]]; then
@@ -3463,6 +3468,10 @@ customer_portal_menu() {
                 fi
                 echo -e "${green}客户门户独立地址：${plain} ${scheme}://${host}:${portal_port}/portal"
                 echo -e "${blue}用户端口：${plain}${portal_port}（不再使用后台端口和后台路径）"
+                [[ -n "$sub_uri" ]] && echo -e "${green}公开订阅地址：${plain} ${sub_uri}<订阅ID>"
+                [[ -n "$sub_json_uri" ]] && echo -e "${green}JSON 订阅地址：${plain} ${sub_json_uri}<订阅ID>"
+                [[ -n "$sub_clash_uri" ]] && echo -e "${green}Clash 订阅地址：${plain} ${sub_clash_uri}<订阅ID>"
+                echo -e "${blue}订阅内部端口：${plain}127.0.0.1:${sub_port}（公开地址固定走用户域名 443）"
                 portal_conf=$(find_reverse_proxy_conf "3x-ui-customer-portal.conf" 2>/dev/null || true)
                 if [[ -n "$portal_conf" && -f "$portal_conf" ]]; then
                     proxy_domain=$(awk '/^[[:space:]]*server_name /{print $2; exit}' "$portal_conf" | tr -d ';')
@@ -3844,13 +3853,15 @@ ensure_reverse_proxy_certificate() {
 }
 
 customer_portal_proxy_menu() {
-    local settings portal_port portal_enabled portal_domain conf_path temp_conf backend_scheme backend_url cert_config key_config public_url previous_conf had_previous
+    local settings portal_port portal_enabled portal_domain conf_path temp_conf backend_scheme backend_url cert_config key_config public_url previous_conf had_previous sub_port
     settings=$(${xui_folder}/x-ui setting -show true 2>/dev/null)
     portal_port=$(echo "$settings" | awk -F': ' '/^portalPort:/{print $2}' | tr -d '[:space:]')
     portal_enabled=$(echo "$settings" | awk -F': ' '/^portalEnabled:/{print $2}' | tr -d '[:space:]')
     cert_config=$(echo "$settings" | awk -F': ' '/^certFile:/{print $2}' | tr -d '[:space:]')
     key_config=$(echo "$settings" | awk -F': ' '/^keyFile:/{print $2}' | tr -d '[:space:]')
+    sub_port=$(echo "$settings" | awk -F': ' '/^subPort:/{print $2}' | tr -d '[:space:]')
     portal_port="${portal_port:-2054}"
+    sub_port="${sub_port:-2096}"
     if [[ "$portal_enabled" == "false" ]]; then
         echo -e "${red}客户门户当前已停用，请先在后台启用。${plain}"
         return 1
@@ -3904,6 +3915,12 @@ EOF
     temp_conf=$(mktemp)
     cat > "$temp_conf" <<EOF
 # Customer portal only. The administration routes are not exposed on this domain.
+# The subscription server stays private; this marked upstream is updated
+# automatically whenever its internal listen port changes in panel settings.
+upstream shiye_3x_ui_subscription {
+    server 127.0.0.1:${sub_port}; # 3X-UI_SUBSCRIPTION_UPSTREAM
+    keepalive 16;
+}
 server {
     listen 80;
     server_name ${portal_domain};
@@ -3918,7 +3935,10 @@ server {
     location = /portal { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-reverse-proxy.conf; }
     location ^~ /portal/ { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-reverse-proxy.conf; }
     location ^~ /assets/ { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-reverse-proxy.conf; }
-    location / { return 404; }
+    # All remaining paths belong to the subscription service. Its own random
+    # paths continue to work when changed; only the private upstream port is
+    # synchronized into this file.
+    location / { proxy_pass http://shiye_3x_ui_subscription; include /etc/nginx/snippets/3x-ui-reverse-proxy.conf; }
 }
 EOF
     if ! apply_reverse_proxy_config "$temp_conf" "$conf_path"; then
@@ -3926,8 +3946,8 @@ EOF
         return 1
     fi
     public_url="https://${portal_domain}/portal"
-    if ! ${xui_folder}/x-ui setting -portalPublicUrl "$public_url" -portalListenIP 127.0.0.1 > /dev/null 2>&1; then
-        echo -e "${red}反代已生成，但客户门户公开地址或本地监听设置写入失败。${plain}"
+    if ! ${xui_folder}/x-ui setting -portalPublicUrl "$public_url" -portalListenIP 127.0.0.1 -subscriptionProxyOrigin "https://${portal_domain}" > /dev/null 2>&1; then
+        echo -e "${red}反代已生成，但客户门户或订阅服务的本地设置写入失败。${plain}"
         restore_reverse_proxy_previous "$conf_path" "$previous_conf" "$had_previous"
         return 1
     fi
@@ -3936,9 +3956,10 @@ EOF
     # argument opens another main menu; the next submenu choice (especially 2)
     # can then be consumed as "update" and unexpectedly download the panel.
     restart 0
-    echo -e "${green}证书已自动部署到 Nginx，客户门户地址和本地监听设置已写入面板。${plain}"
+    echo -e "${green}证书已自动部署到 Nginx，客户门户和订阅服务已统一到用户域名。${plain}"
     echo -e "${green}客户门户反代配置完成：${public_url}${plain}"
-    echo -e "${blue}后端仅监听：127.0.0.1:${portal_port}${plain}"
+    echo -e "${green}公开订阅地址统一使用：https://${portal_domain}/<订阅路径>/<订阅ID>${plain}"
+    echo -e "${blue}内部监听：客户门户 127.0.0.1:${portal_port}，订阅服务 127.0.0.1:${sub_port}${plain}"
 }
 
 admin_panel_proxy_menu() {

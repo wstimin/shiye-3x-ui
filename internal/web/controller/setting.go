@@ -42,6 +42,23 @@ type updateSettingForm struct {
 	ClearDiscordBotToken bool   `json:"clearDiscordBotToken" form:"clearDiscordBotToken"`
 }
 
+func subscriptionRuntimeChanged(old, next *entity.AllSetting) bool {
+	if old == nil || next == nil {
+		return false
+	}
+	return old.SubEnable != next.SubEnable ||
+		old.SubJsonEnable != next.SubJsonEnable ||
+		old.SubClashEnable != next.SubClashEnable ||
+		old.SubListen != next.SubListen ||
+		old.SubPort != next.SubPort ||
+		old.SubPath != next.SubPath ||
+		old.SubJsonPath != next.SubJsonPath ||
+		old.SubClashPath != next.SubClashPath ||
+		old.SubDomain != next.SubDomain ||
+		old.SubCertFile != next.SubCertFile ||
+		old.SubKeyFile != next.SubKeyFile
+}
+
 type validateRegexForm struct {
 	Regex string `json:"regex" form:"regex"`
 }
@@ -128,6 +145,7 @@ func (a *SettingController) updateSetting(c *gin.Context) {
 		return
 	}
 	allSetting := &form.AllSetting
+	oldAllSetting, _ := a.settingService.GetAllSetting()
 	oldTwoFactor, twoFactorErr := a.settingService.GetTwoFactorEnable()
 	oldPanelOutbound, _ := a.settingService.GetPanelOutbound()
 	oldTgEnable, _ := a.settingService.GetTgbotEnabled()
@@ -186,6 +204,11 @@ func (a *SettingController) updateSetting(c *gin.Context) {
 				oldDiscordChannelId != allSetting.DiscordChannelId))
 		if discordChanged {
 			reloadDiscordFunc()
+		}
+	}
+	if err == nil && a.settingService.ManagedSubscriptionProxyEnabled() && subscriptionRuntimeChanged(oldAllSetting, allSetting) {
+		if restartErr := a.panelService.RestartPanel(3 * time.Second); restartErr != nil {
+			err = restartErr
 		}
 	}
 	jsonMsg(c, I18nWeb(c, "pages.settings.toasts.modifySettings"), err)

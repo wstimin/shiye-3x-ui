@@ -260,6 +260,14 @@ func showSetting(show bool) {
 		portalListen, portalListenErr := settingService.GetPortalListen()
 		portalPort, portalPortErr := settingService.GetPortalPort()
 		portalPublicURL, portalPublicURLErr := settingService.GetPortalPublicURL()
+		subListen, subListenErr := settingService.GetSubListen()
+		subPort, subPortErr := settingService.GetSubPort()
+		subPath, subPathErr := settingService.GetSubPath()
+		subJSONPath, subJSONPathErr := settingService.GetSubJsonPath()
+		subClashPath, subClashPathErr := settingService.GetSubClashPath()
+		subURI, subURIErr := settingService.GetSubURI()
+		subJSONURI, subJSONURIErr := settingService.GetSubJsonURI()
+		subClashURI, subClashURIErr := settingService.GetSubClashURI()
 
 		userService := panel.UserService{}
 		userModel, err := userService.GetFirstUser()
@@ -299,6 +307,30 @@ func showSetting(show bool) {
 		if portalPublicURLErr == nil {
 			fmt.Println("portalPublicUrl:", portalPublicURL)
 		}
+		if subListenErr == nil {
+			fmt.Println("subListen:", subListen)
+		}
+		if subPortErr == nil {
+			fmt.Println("subPort:", subPort)
+		}
+		if subPathErr == nil {
+			fmt.Println("subPath:", subPath)
+		}
+		if subJSONPathErr == nil {
+			fmt.Println("subJsonPath:", subJSONPath)
+		}
+		if subClashPathErr == nil {
+			fmt.Println("subClashPath:", subClashPath)
+		}
+		if subURIErr == nil {
+			fmt.Println("subURI:", subURI)
+		}
+		if subJSONURIErr == nil {
+			fmt.Println("subJsonURI:", subJSONURI)
+		}
+		if subClashURIErr == nil {
+			fmt.Println("subClashURI:", subClashURI)
+		}
 	}
 }
 
@@ -322,6 +354,18 @@ func updatePortalSetting(port int, listenIP string, publicURL string) error {
 		}
 		fmt.Printf("Customer portal public URL set successfully: %s\n", publicURL)
 	}
+	return nil
+}
+
+func configureSubscriptionProxy(origin string) error {
+	if strings.TrimSpace(origin) == "" {
+		return nil
+	}
+	settingService := service.SettingService{}
+	if err := settingService.ConfigureManagedSubscriptionProxy(origin); err != nil {
+		return err
+	}
+	fmt.Printf("Subscription reverse proxy origin set successfully: %s\n", origin)
 	return nil
 }
 
@@ -652,6 +696,7 @@ func main() {
 	var listenIP string
 	var portalListenIP string
 	var portalPublicURL string
+	var subscriptionProxyOrigin string
 	var portalPort int
 	var getListen bool
 	var webCertFile string
@@ -676,6 +721,7 @@ func main() {
 	settingCmd.StringVar(&portalListenIP, "portalListenIP", "", "Set customer portal listen IP")
 	settingCmd.IntVar(&portalPort, "portalPort", 0, "Set customer portal port number")
 	settingCmd.StringVar(&portalPublicURL, "portalPublicUrl", "", "Set customer portal public URL")
+	settingCmd.StringVar(&subscriptionProxyOrigin, "subscriptionProxyOrigin", "", "Set the managed public subscription origin")
 	settingCmd.BoolVar(&resetTwoFactor, "resetTwoFactor", false, "Reset two-factor authentication settings")
 	settingCmd.BoolVar(&getListen, "getListen", false, "Display current panel listenIP IP")
 	settingCmd.BoolVar(&getCert, "getCert", false, "Display current certificate settings")
@@ -767,6 +813,10 @@ func main() {
 			}
 			if err = updatePortalSetting(portalPort, portalListenIP, portalPublicURL); err != nil {
 				fmt.Println("Failed to update customer portal settings:", err)
+				return
+			}
+			if err = configureSubscriptionProxy(subscriptionProxyOrigin); err != nil {
+				fmt.Println("Failed to configure subscription reverse proxy:", err)
 				return
 			}
 		}

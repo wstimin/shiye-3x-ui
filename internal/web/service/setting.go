@@ -165,6 +165,7 @@ var defaultValueMap = map[string]string{
 	"subClashEnable":              "false",
 	"subClashPath":                "/clash/",
 	"subClashURI":                 "",
+	"subscriptionProxyOrigin":     "",
 	"subClashEnableRouting":       "false",
 	"subClashRules":               "",
 	"subJsonMux":                  "",
@@ -1517,6 +1518,10 @@ func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting, clears 
 	if err := s.preserveRedactedSecrets(allSetting, clears); err != nil {
 		return err
 	}
+	managedSubscriptionProxy, err := s.ApplyManagedSubscriptionProxySettings(allSetting)
+	if err != nil {
+		return err
+	}
 	if err := validateSettingsURLs(allSetting); err != nil {
 		return err
 	}
@@ -1544,6 +1549,10 @@ func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting, clears 
 		for _, st := range existing {
 			byKey[st.Key] = st
 		}
+		oldSubPort := defaultValueMap["subPort"]
+		if st, ok := byKey["subPort"]; ok && strings.TrimSpace(st.Value) != "" {
+			oldSubPort = st.Value
+		}
 		for _, field := range fields {
 			key := field.Tag.Get("json")
 			fieldV := v.FieldByName(field.Name)
@@ -1559,6 +1568,11 @@ func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting, clears 
 				continue
 			}
 			if err := tx.Create(&model.Setting{Key: key, Value: value}).Error; err != nil {
+				return err
+			}
+		}
+		if managedSubscriptionProxy && oldSubPort != strconv.Itoa(allSetting.SubPort) {
+			if err := SyncManagedSubscriptionProxyPort(allSetting.SubPort); err != nil {
 				return err
 			}
 		}
