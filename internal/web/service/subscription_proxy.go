@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -28,6 +30,16 @@ var managedPortalProxyConfigCandidates = []string{
 }
 
 var managedSubscriptionUpstreamPattern = regexp.MustCompile(`(?m)(server[\t ]+127\.0\.0\.1:)\d+(;[\t ]*#[\t ]*3X-UI_SUBSCRIPTION_UPSTREAM[\t ]*)$`)
+
+func runNginxCommand(nginx string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	output, err := exec.CommandContext(ctx, nginx, args...).CombinedOutput()
+	if ctx.Err() != nil {
+		return output, fmt.Errorf("nginx command timed out: %w", ctx.Err())
+	}
+	return output, err
+}
 
 func normalizeSubscriptionProxyOrigin(raw string) (string, error) {
 	raw = strings.TrimSpace(raw)
@@ -193,13 +205,13 @@ func SyncManagedSubscriptionProxyPort(port int) error {
 		restore()
 		return fmt.Errorf("nginx executable was not found: %w", err)
 	}
-	if output, testErr := exec.Command(nginx, "-t").CombinedOutput(); testErr != nil {
+	if output, testErr := runNginxCommand(nginx, "-t"); testErr != nil {
 		restore()
 		return fmt.Errorf("nginx configuration test failed: %s", strings.TrimSpace(string(output)))
 	}
-	if output, reloadErr := exec.Command(nginx, "-s", "reload").CombinedOutput(); reloadErr != nil {
+	if output, reloadErr := runNginxCommand(nginx, "-s", "reload"); reloadErr != nil {
 		restore()
-		_, _ = exec.Command(nginx, "-s", "reload").CombinedOutput()
+		_, _ = runNginxCommand(nginx, "-s", "reload")
 		return fmt.Errorf("nginx reload failed: %s", strings.TrimSpace(string(output)))
 	}
 	return nil
