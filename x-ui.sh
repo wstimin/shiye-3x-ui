@@ -3432,12 +3432,13 @@ show_usage() {
 customer_portal_menu() {
     while true; do
         echo -e "\n${green}客户门户管理${plain}"
-        echo -e "  1. 查看客户门户地址"
+        echo -e "  1. 查看后台与客户门户地址"
         echo -e "  2. 查看门户接口配置说明"
-        echo -e "  3. 设置/修改客户域名并生效"
-        echo -e "  4. 隐藏/恢复 X-UI 后台公网端口"
+        echo -e "  3. 自动配置客户门户域名反代"
+        echo -e "  4. 自动配置管理后台域名反代"
+        echo -e "  5. 隐藏/恢复后端公网端口"
         echo -e "  0. 返回上一级"
-        read -rp "请输入选项 [0-4]: " portal_choice
+        read -rp "请输入选项 [0-5]: " portal_choice
         case "$portal_choice" in
             1)
                 local settings host portal_port portal_enabled portal_public_url scheme response proxy_domain proxy_scheme
@@ -3471,18 +3472,32 @@ customer_portal_menu() {
                         echo -e "${yellow}检测到旧版反向代理仍指向后台端口，请运行第 3 项重新生成。${plain}"
                     fi
                 fi
+                if [[ -f /etc/nginx/conf.d/3x-ui-admin-panel.conf ]]; then
+                    local admin_domain admin_scheme admin_base_path
+                    admin_domain=$(awk '/^[[:space:]]*server_name /{print $2; exit}' /etc/nginx/conf.d/3x-ui-admin-panel.conf | tr -d ';')
+                    admin_scheme="http"
+                    grep -qE '^[[:space:]]*listen 443' /etc/nginx/conf.d/3x-ui-admin-panel.conf && admin_scheme="https"
+                    admin_base_path=$(echo "$settings" | sed -n 's/^webBasePath:[[:space:]]*//p' | head -n 1)
+                    admin_base_path="${admin_base_path:-/}"
+                    [[ -n "$admin_domain" ]] && echo -e "${green}管理后台域名入口：${plain} ${admin_scheme}://${admin_domain}${admin_base_path}"
+                fi
                 ;;
             2)
                 echo -e "请通过已登录的后台 API 配置卡密系统："
                 echo -e "  GET/POST /panel/api/portal/billing"
                 echo -e "卡密接口字段：cardProviderUrl、cardProviderSecret、cardProviderSign"
                 echo -e "购买跳转链接单独使用 purchaseUrl，与卡密接口无关。"
-                echo -e "客户域名请使用本菜单的第 3 项反向代理到独立用户端口。若要隐藏后台公网端口，请使用第 4 项启用安全模式。"
+                echo -e "客户门户和管理后台可分别使用本菜单第 3、4 项配置独立域名反代。"
+                echo -e "反代配置只需输入域名，Nginx、证书、HTTPS 和自动续期均由脚本处理。"
+                echo -e "若要隐藏后端公网端口，请使用第 5 项启用安全模式。"
                 ;;
             3)
                 customer_portal_proxy_menu
                 ;;
             4)
+                admin_panel_proxy_menu
+                ;;
+            5)
                 customer_portal_secure_mode
                 ;;
             0) return 0 ;;
@@ -3496,48 +3511,62 @@ customer_portal_menu() {
 # which proxies to 127.0.0.1. Admin access then uses SSH forwarding or a
 # separately protected admin reverse proxy.
 customer_portal_secure_mode() {
-    local settings current_port current_ip mode confirm
+    local settings current_port current_ip portal_port portal_ip mode confirm
     settings=$(${xui_folder}/x-ui setting -show true 2>/dev/null)
     current_port=$(echo "$settings" | awk -F': ' '/^port:/{print $2}' | tr -d '[:space:]')
     current_ip=$(echo "$settings" | awk -F': ' '/^listenIP:/{print $2}' | tr -d '[:space:]')
+    portal_port=$(echo "$settings" | awk -F': ' '/^portalPort:/{print $2}' | tr -d '[:space:]')
+    portal_ip=$(echo "$settings" | awk -F': ' '/^portalListen:/{print $2}' | tr -d '[:space:]')
     current_port="${current_port:-2053}"
     current_ip="${current_ip:-0.0.0.0}"
+    portal_port="${portal_port:-2054}"
+    portal_ip="${portal_ip:-0.0.0.0}"
 
     echo -e "\n${yellow}安全模式说明：${plain}"
-    echo -e "  启用后 X-UI 只监听 127.0.0.1:${current_port}，公网将无法直接访问 X-UI 后台端口。"
-    echo -e "  客户门户必须通过 Nginx 独立域名访问；管理员请使用 SSH 隧道或另行配置受保护的后台域名。"
-    echo -e "  当前监听地址：${current_ip}:${current_port}"
-    echo -e "  1. 启用安全模式（监听 127.0.0.1）"
-    echo -e "  2. 恢复公网监听（监听 0.0.0.0）"
+    echo -e "  启用后管理后台和客户门户都只监听 127.0.0.1，公网只能通过各自的 Nginx 域名访问。"
+    echo -e "  管理后台后端：${current_ip}:${current_port}"
+    echo -e "  客户门户后端：${portal_ip}:${portal_port}"
+    echo -e "  1. 启用安全模式（两个后端均监听 127.0.0.1）"
+    echo -e "  2. 恢复公网监听（两个后端均监听 0.0.0.0）"
     echo -e "  0. 返回"
     read -rp "请选择：" mode
     case "$mode" in
         1)
             read -rp "确认隐藏后台公网端口？请输入 YES：" confirm
             [[ "$confirm" != "YES" ]] && { echo -e "${yellow}已取消。${plain}"; return 0; }
-            ${xui_folder}/x-ui setting -listenIP 127.0.0.1 > /dev/null 2>&1
+            if ! ${xui_folder}/x-ui setting -listenIP 127.0.0.1 -portalListenIP 127.0.0.1 > /dev/null 2>&1; then
+                echo -e "${red}写入本地监听设置失败，未更改服务。${plain}"
+                return 1
+            fi
             restart
-            echo -e "${green}已启用安全模式，X-UI 仅监听 127.0.0.1:${current_port}。${plain}"
+            echo -e "${green}已启用安全模式。管理后台监听 127.0.0.1:${current_port}，客户门户监听 127.0.0.1:${portal_port}。${plain}"
             echo -e "管理员 SSH 隧道：${yellow}ssh -L 2222:127.0.0.1:${current_port} root@服务器公网IP${plain}"
             echo -e "隧道建立后访问：${yellow}http://127.0.0.1:2222${plain}"
             ;;
         2)
             read -rp "确认恢复后台公网监听？请输入 YES：" confirm
             [[ "$confirm" != "YES" ]] && { echo -e "${yellow}已取消。${plain}"; return 0; }
-            ${xui_folder}/x-ui setting -listenIP 0.0.0.0 > /dev/null 2>&1
+            if ! ${xui_folder}/x-ui setting -listenIP 0.0.0.0 -portalListenIP 0.0.0.0 > /dev/null 2>&1; then
+                echo -e "${red}恢复公网监听设置失败。${plain}"
+                return 1
+            fi
             restart
-            echo -e "${green}已恢复公网监听 0.0.0.0:${current_port}。${plain}"
+            echo -e "${green}已恢复公网监听：后台 0.0.0.0:${current_port}，客户门户 0.0.0.0:${portal_port}。${plain}"
             ;;
         0) return 0 ;;
         *) echo -e "${red}选项无效。${plain}" ;;
     esac
 }
 
-# Generate a portal-only reverse proxy to the independent portal listener.
-# Panel routes are never registered on that listener and return 404.
-ensure_customer_portal_nginx() {
+# Reverse-proxy certificates are deliberately separate from the panel's direct
+# TLS certificate. Nginx terminates public HTTPS while both panel listeners stay
+# private. The original SSL menu remains responsible for direct-panel TLS.
+REVERSE_PROXY_CERT_FILE=""
+REVERSE_PROXY_KEY_FILE=""
+
+ensure_reverse_proxy_nginx() {
     if ! command -v nginx > /dev/null 2>&1; then
-        echo -e "${yellow}未检测到 Nginx，正在根据当前系统自动安装...${plain}"
+        echo -e "${yellow}未检测到 Nginx，正在自动安装...${plain}"
         case "${release}" in
             ubuntu | debian | armbian)
                 DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y nginx
@@ -3562,28 +3591,24 @@ ensure_customer_portal_nginx() {
                 apk update && apk add nginx
                 ;;
             *)
-                echo -e "${red}当前系统暂不支持自动安装 Nginx：${release}${plain}"
+                echo -e "${red}当前系统不支持自动安装 Nginx：${release}${plain}"
                 return 1
                 ;;
         esac
-        if ! command -v nginx > /dev/null 2>&1; then
-            echo -e "${red}Nginx 自动安装失败，请检查软件源和网络后重试。${plain}"
+        command -v nginx > /dev/null 2>&1 || {
+            echo -e "${red}Nginx 自动安装失败，请检查软件源和网络。${plain}"
             return 1
-        fi
+        }
         echo -e "${green}Nginx 安装完成。${plain}"
     fi
-
     if command -v systemctl > /dev/null 2>&1; then
         systemctl enable nginx > /dev/null 2>&1 || true
-        systemctl start nginx > /dev/null 2>&1 || true
     elif command -v rc-update > /dev/null 2>&1; then
         rc-update add nginx default > /dev/null 2>&1 || true
-        rc-service nginx start > /dev/null 2>&1 || true
     fi
-    return 0
 }
 
-reload_customer_portal_nginx() {
+reload_reverse_proxy_nginx() {
     if command -v systemctl > /dev/null 2>&1 && systemctl is-active nginx > /dev/null 2>&1; then
         systemctl reload nginx > /dev/null 2>&1
         return $?
@@ -3592,182 +3617,299 @@ reload_customer_portal_nginx() {
         rc-service nginx reload > /dev/null 2>&1
         return $?
     fi
-    if nginx -s reload > /dev/null 2>&1; then
-        return 0
-    fi
+    nginx -s reload > /dev/null 2>&1 && return 0
     nginx > /dev/null 2>&1
 }
 
-register_customer_portal_certificate_reload() {
-    local domain="$1"
-    local cert_file="$2"
-    local key_file="$3"
-    local reload_cmd="systemctl reload nginx 2>/dev/null || nginx -s reload; systemctl restart x-ui 2>/dev/null || rc-service x-ui restart 2>/dev/null"
-
-    if [[ "$cert_file" == /etc/letsencrypt/* || "$key_file" == /etc/letsencrypt/* ]]; then
-        install -d -m 755 /etc/letsencrypt/renewal-hooks/deploy
-        cat > /etc/letsencrypt/renewal-hooks/deploy/3x-ui-customer-portal <<'EOF'
-#!/bin/sh
-systemctl reload nginx 2>/dev/null || nginx -s reload 2>/dev/null || true
-systemctl restart x-ui 2>/dev/null || rc-service x-ui restart 2>/dev/null || true
+write_reverse_proxy_snippet() {
+    install -d -m 755 /etc/nginx/snippets /var/www/3x-ui-acme/.well-known/acme-challenge
+    cat > /etc/nginx/snippets/3x-ui-reverse-proxy.conf <<'EOF'
+proxy_http_version 1.1;
+proxy_set_header Upgrade $http_upgrade;
+proxy_set_header Connection "upgrade";
+proxy_set_header Host $host;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Host $host;
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_read_timeout 3600s;
+proxy_send_timeout 3600s;
+proxy_buffering off;
+proxy_ssl_verify off;
 EOF
-        chmod 755 /etc/letsencrypt/renewal-hooks/deploy/3x-ui-customer-portal
-        echo -e "${green}已注册证书续期钩子：续期后自动重载 Nginx 和面板。${plain}"
-    elif command -v ~/.acme.sh/acme.sh > /dev/null 2>&1 && ~/.acme.sh/acme.sh --list 2> /dev/null | awk '{print $1}' | grep -Fxq "$domain"; then
-        ~/.acme.sh/acme.sh --installcert --force -d "$domain" \
-            --key-file "$key_file" \
-            --fullchain-file "$cert_file" \
-            --reloadcmd "$reload_cmd" > /dev/null 2>&1 || true
-        echo -e "${green}已注册 acme.sh 自动续期后的 Nginx 和面板重载。${plain}"
+}
+
+apply_reverse_proxy_config() {
+    local temp_conf="$1"
+    local conf_path="$2"
+    local backup_path=""
+    if [[ -f "$conf_path" ]]; then
+        backup_path="${conf_path}.rollback"
+        cp -p "$conf_path" "$backup_path"
     fi
+    install -m 644 "$temp_conf" "$conf_path"
+    rm -f "$temp_conf"
+    if nginx -t > /dev/null 2>&1 && reload_reverse_proxy_nginx; then
+        [[ -n "$backup_path" ]] && rm -f "$backup_path"
+        return 0
+    fi
+    echo -e "${red}Nginx 配置校验或重载失败，正在恢复旧配置。${plain}"
+    if [[ -n "$backup_path" && -f "$backup_path" ]]; then
+        mv -f "$backup_path" "$conf_path"
+    else
+        rm -f "$conf_path"
+    fi
+    nginx -t > /dev/null 2>&1 && reload_reverse_proxy_nginx > /dev/null 2>&1 || true
+    return 1
+}
+
+restore_reverse_proxy_previous() {
+    local conf_path="$1"
+    local previous_conf="$2"
+    local had_previous="$3"
+    if [[ "$had_previous" == "true" ]]; then
+        install -m 644 "$previous_conf" "$conf_path"
+    else
+        rm -f "$conf_path"
+    fi
+    rm -f "$previous_conf"
+    nginx -t > /dev/null 2>&1 && reload_reverse_proxy_nginx > /dev/null 2>&1 || true
+}
+
+reverse_proxy_domain_in_use() {
+    local domain="$1"
+    local own_conf="$2"
+    local conf
+    for conf in /etc/nginx/conf.d/3x-ui-admin-panel.conf /etc/nginx/conf.d/3x-ui-customer-portal.conf; do
+        [[ "$conf" == "$own_conf" || ! -f "$conf" ]] && continue
+        if awk -v wanted="$domain" '$1 == "server_name" {gsub(/;/, "", $2); if ($2 == wanted) found=1} END {exit !found}' "$conf"; then
+            echo -e "${red}域名 ${domain} 已被另一项反向代理使用，请为后台和客户门户使用不同域名。${plain}"
+            return 0
+        fi
+    done
+    return 1
+}
+
+ensure_reverse_proxy_certificate() {
+    local domain="$1"
+    local cert_dir="/root/cert/reverse-proxy/${domain}"
+    local cert_file="${cert_dir}/fullchain.pem"
+    local key_file="${cert_dir}/privkey.pem"
+    local reload_cmd="systemctl reload nginx 2>/dev/null || nginx -s reload 2>/dev/null || rc-service nginx reload 2>/dev/null"
+    REVERSE_PROXY_CERT_FILE="$cert_file"
+    REVERSE_PROXY_KEY_FILE="$key_file"
+
+    if [[ -s "$cert_file" && -s "$key_file" ]]; then
+        if ! command -v openssl > /dev/null 2>&1 || openssl x509 -checkend 604800 -noout -in "$cert_file" > /dev/null 2>&1; then
+            echo -e "${green}检测到有效反代证书，直接复用。${plain}"
+            return 0
+        fi
+    fi
+
+    if ! command -v ~/.acme.sh/acme.sh > /dev/null 2>&1; then
+        echo -e "${yellow}正在自动安装 acme.sh...${plain}"
+        install_acme || return 1
+    fi
+    mkdir -p "$cert_dir"
+    ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt --force > /dev/null 2>&1
+    echo -e "${yellow}正在通过 Nginx 验证域名并申请证书：${domain}${plain}"
+    if ! ~/.acme.sh/acme.sh --issue -d "$domain" --webroot /var/www/3x-ui-acme --server letsencrypt; then
+        if [[ ! -s ~/.acme.sh/${domain}_ecc/fullchain.cer && ! -s ~/.acme.sh/${domain}/fullchain.cer ]]; then
+            echo -e "${red}证书申请失败。请确认域名已解析到本机，并且公网 80 端口可访问 Nginx。${plain}"
+            return 1
+        fi
+    fi
+    ~/.acme.sh/acme.sh --installcert --force -d "$domain" \
+        --key-file "$key_file" \
+        --fullchain-file "$cert_file" \
+        --reloadcmd "$reload_cmd" || true
+    if [[ ! -s "$cert_file" || ! -s "$key_file" ]]; then
+        echo -e "${red}证书已签发但安装到反代目录失败。${plain}"
+        return 1
+    fi
+    chmod 600 "$key_file"
+    chmod 644 "$cert_file"
+    ~/.acme.sh/acme.sh --upgrade --auto-upgrade > /dev/null 2>&1 || true
+    echo -e "${green}证书申请成功，续期任务已启用。${plain}"
 }
 
 customer_portal_proxy_menu() {
-    ensure_customer_portal_nginx || return 1
+    ensure_reverse_proxy_nginx || return 1
+    write_reverse_proxy_snippet
 
-    local settings portal_port portal_listen portal_enabled portal_domain conf_path cert_file key_file custom_cert custom_key temp_conf backend_scheme backend_host backend_url cert_config key_config public_scheme public_url sync_panel panel_cert_updated portal_setting_saved
+    local settings portal_port portal_enabled portal_domain conf_path temp_conf backend_scheme backend_url cert_config key_config public_url previous_conf had_previous
     settings=$(${xui_folder}/x-ui setting -show true 2>/dev/null)
     portal_port=$(echo "$settings" | awk -F': ' '/^portalPort:/{print $2}' | tr -d '[:space:]')
-    portal_listen=$(echo "$settings" | awk -F': ' '/^portalListen:/{print $2}' | tr -d '[:space:]')
     portal_enabled=$(echo "$settings" | awk -F': ' '/^portalEnabled:/{print $2}' | tr -d '[:space:]')
     cert_config=$(echo "$settings" | awk -F': ' '/^certFile:/{print $2}' | tr -d '[:space:]')
     key_config=$(echo "$settings" | awk -F': ' '/^keyFile:/{print $2}' | tr -d '[:space:]')
     portal_port="${portal_port:-2054}"
-    portal_listen="${portal_listen:-0.0.0.0}"
     if [[ "$portal_enabled" == "false" ]]; then
-        echo -e "${red}客户门户当前已停用，请先在后台启用后再配置域名。${plain}"
+        echo -e "${red}客户门户当前已停用，请先在后台启用。${plain}"
         return 1
     fi
     backend_scheme="http"
-    [[ -n "$cert_config" && -n "$key_config" ]] && backend_scheme="https"
-    case "$portal_listen" in
-        "" | "0.0.0.0" | "127.0.0.1") backend_host="127.0.0.1" ;;
-        "::" | "::1") backend_host="[::1]" ;;
-        *:*) backend_host="[${portal_listen}]" ;;
-        *) backend_host="$portal_listen" ;;
-    esac
-    backend_url="${backend_scheme}://${backend_host}:${portal_port}"
+    [[ -s "$cert_config" && -s "$key_config" ]] && backend_scheme="https"
+    backend_url="${backend_scheme}://127.0.0.1:${portal_port}"
 
     read -rp "请输入客户门户域名（例如 user.example.com）：" portal_domain
+    portal_domain="${portal_domain// /}"
     if ! is_domain "$portal_domain"; then
-        echo -e "${red}域名格式不正确，未写入配置。${plain}"
+        echo -e "${red}域名格式不正确。${plain}"
         return 1
     fi
-
-    cert_file="/etc/letsencrypt/live/${portal_domain}/fullchain.pem"
-    key_file="/etc/letsencrypt/live/${portal_domain}/privkey.pem"
-    if [[ -s "/root/cert/${portal_domain}/fullchain.pem" && -s "/root/cert/${portal_domain}/privkey.pem" ]]; then
-        cert_file="/root/cert/${portal_domain}/fullchain.pem"
-        key_file="/root/cert/${portal_domain}/privkey.pem"
-        echo -e "${green}已自动找到面板申请的域名证书：${cert_file}${plain}"
-    elif [[ -s "$cert_file" && -s "$key_file" ]]; then
-        echo -e "${green}已自动找到 Let's Encrypt 域名证书：${cert_file}${plain}"
-    fi
-    read -rp "证书 fullchain 路径（没有证书可留空，先生成 HTTP 配置）：" custom_cert
-    read -rp "证书私钥路径（没有证书可留空）：" custom_key
-    [[ -n "$custom_cert" ]] && cert_file="$custom_cert"
-    [[ -n "$custom_key" ]] && key_file="$custom_key"
-
-    panel_cert_updated="false"
-    if [[ -s "$cert_file" && -s "$key_file" ]]; then
-        read -rp "检测到有效证书，是否同时应用到 X-UI 面板 HTTPS？[Y/n]：" sync_panel
-        if [[ ! "$sync_panel" =~ ^[Nn]$ ]]; then
-            if ${xui_folder}/x-ui cert -webCert "$cert_file" -webCertKey "$key_file" > /dev/null 2>&1; then
-                panel_cert_updated="true"
-                backend_scheme="https"
-                backend_url="${backend_scheme}://${backend_host}:${portal_port}"
-                register_customer_portal_certificate_reload "$portal_domain" "$cert_file" "$key_file"
-                echo -e "${green}证书已同步到 X-UI 面板，配置完成后将自动重启生效。${plain}"
-            else
-                echo -e "${yellow}证书可供 Nginx 使用，但写入面板失败；将保留面板当前证书配置。${plain}"
-            fi
-        fi
-    fi
-
     conf_path="/etc/nginx/conf.d/3x-ui-customer-portal.conf"
+    reverse_proxy_domain_in_use "$portal_domain" "$conf_path" && return 1
+    previous_conf=$(mktemp)
+    had_previous="false"
+    if [[ -f "$conf_path" ]]; then
+        cp -p "$conf_path" "$previous_conf"
+        had_previous="true"
+    fi
+
     temp_conf=$(mktemp)
-    if [[ -s "$cert_file" && -s "$key_file" ]]; then
-        public_scheme="https"
-        cat > "$temp_conf" <<EOF
-# Generated by x-ui customer portal menu. Proxies only to the independent portal listener.
+    cat > "$temp_conf" <<EOF
+# Temporary HTTP endpoint generated for automatic ACME validation.
 server {
     listen 80;
     server_name ${portal_domain};
+    location ^~ /.well-known/acme-challenge/ { root /var/www/3x-ui-acme; default_type text/plain; try_files \$uri =404; }
+    location = / { return 302 /portal; }
+    location = /portal { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-reverse-proxy.conf; }
+    location ^~ /portal/ { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-reverse-proxy.conf; }
+    location ^~ /assets/ { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-reverse-proxy.conf; }
+    location / { return 404; }
+}
+EOF
+    if ! apply_reverse_proxy_config "$temp_conf" "$conf_path"; then
+        rm -f "$previous_conf"
+        return 1
+    fi
+    if ! ensure_reverse_proxy_certificate "$portal_domain"; then
+        restore_reverse_proxy_previous "$conf_path" "$previous_conf" "$had_previous"
+        return 1
+    fi
+
+    temp_conf=$(mktemp)
+    cat > "$temp_conf" <<EOF
+# Customer portal only. The administration routes are not exposed on this domain.
+server {
+    listen 80;
+    server_name ${portal_domain};
+    location ^~ /.well-known/acme-challenge/ { root /var/www/3x-ui-acme; default_type text/plain; try_files \$uri =404; }
     location / { return 301 https://\$host\$request_uri; }
 }
 server {
     listen 443 ssl http2;
     server_name ${portal_domain};
-    ssl_certificate ${cert_file};
-    ssl_certificate_key ${key_file};
+    ssl_certificate ${REVERSE_PROXY_CERT_FILE};
+    ssl_certificate_key ${REVERSE_PROXY_KEY_FILE};
     location = / { return 302 /portal; }
-    location = /portal { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location ^~ /portal/ { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location ^~ /assets/ { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
+    location = /portal { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-reverse-proxy.conf; }
+    location ^~ /portal/ { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-reverse-proxy.conf; }
+    location ^~ /assets/ { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-reverse-proxy.conf; }
     location / { return 404; }
 }
 EOF
-    else
-        public_scheme="http"
-        echo -e "${yellow}证书文件不存在，先生成 HTTP 配置。申请证书后重新运行此项即可启用 HTTPS。${plain}"
-        cat > "$temp_conf" <<EOF
-# Generated by x-ui customer portal menu. Proxies only to the independent portal listener.
-server {
-    listen 80;
-    server_name ${portal_domain};
-    location = / { return 302 /portal; }
-    location = /portal { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location ^~ /portal/ { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location ^~ /assets/ { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-portal-proxy.conf; }
-    location / { return 404; }
-}
-EOF
-    fi
-
-    install -d -m 755 /etc/nginx/snippets
-    cat > /etc/nginx/snippets/3x-ui-portal-proxy.conf <<'EOF'
-proxy_http_version 1.1;
-proxy_set_header Upgrade $http_upgrade;
-proxy_set_header Connection "upgrade";
-proxy_set_header Host $http_host;
-proxy_set_header X-Real-IP $remote_addr;
-proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-proxy_set_header X-Forwarded-Proto $scheme;
-proxy_read_timeout 3600s;
-proxy_send_timeout 3600s;
-proxy_buffering off;
-EOF
-    if [[ "$backend_scheme" == "https" ]]; then
-        echo 'proxy_ssl_verify off;' >> /etc/nginx/snippets/3x-ui-portal-proxy.conf
-    fi
-    if [[ -f "$conf_path" ]]; then
-        cp -p "$conf_path" "${conf_path}.bak.$(date +%s)"
-    fi
-    install -m 644 "$temp_conf" "$conf_path"
-    rm -f "$temp_conf"
-    if nginx -t; then
-        if ! reload_customer_portal_nginx; then
-            echo -e "${red}Nginx 配置校验成功，但服务启动或重载失败，请查看 Nginx 日志。${plain}"
-            return 1
-        fi
-        public_url="${public_scheme}://${portal_domain}/portal"
-        portal_setting_saved="false"
-        if ! ${xui_folder}/x-ui setting -portalPublicUrl "$public_url" > /dev/null 2>&1; then
-            echo -e "${yellow}Nginx 已生效，但门户公开地址写入数据库失败，请在后台手动填写：${public_url}${plain}"
-        else
-            portal_setting_saved="true"
-        fi
-        if [[ "$panel_cert_updated" == "true" || "$portal_setting_saved" == "true" ]]; then
-            restart
-        fi
-        echo -e "${green}客户门户反向代理已写入：${plain}${conf_path}"
-        echo -e "${green}客户地址：${plain} ${public_url}"
-        echo -e "${blue}反向代理目标：${plain} ${backend_url}（独立用户端口）"
-        echo -e "${yellow}后台地址、后台端口和后台路径均未暴露给该域名。${plain}"
-    else
-        echo -e "${red}nginx -t 校验失败，已保留配置文件但未 reload。${plain}"
+    if ! apply_reverse_proxy_config "$temp_conf" "$conf_path"; then
+        restore_reverse_proxy_previous "$conf_path" "$previous_conf" "$had_previous"
         return 1
     fi
+    public_url="https://${portal_domain}/portal"
+    if ! ${xui_folder}/x-ui setting -portalPublicUrl "$public_url" -portalListenIP 127.0.0.1 > /dev/null 2>&1; then
+        echo -e "${red}反代已生成，但客户门户公开地址或本地监听设置写入失败。${plain}"
+        restore_reverse_proxy_previous "$conf_path" "$previous_conf" "$had_previous"
+        return 1
+    fi
+    rm -f "$previous_conf"
+    restart
+    echo -e "${green}客户门户反代配置完成：${public_url}${plain}"
+    echo -e "${blue}后端仅监听：127.0.0.1:${portal_port}${plain}"
+}
+
+admin_panel_proxy_menu() {
+    ensure_reverse_proxy_nginx || return 1
+    write_reverse_proxy_snippet
+
+    local settings panel_port panel_domain base_path conf_path temp_conf backend_scheme backend_url cert_config key_config previous_conf had_previous
+    settings=$(${xui_folder}/x-ui setting -show true 2>/dev/null)
+    panel_port=$(echo "$settings" | awk -F': ' '/^port:/{print $2}' | tr -d '[:space:]')
+    base_path=$(echo "$settings" | sed -n 's/^webBasePath:[[:space:]]*//p' | head -n 1)
+    cert_config=$(echo "$settings" | awk -F': ' '/^certFile:/{print $2}' | tr -d '[:space:]')
+    key_config=$(echo "$settings" | awk -F': ' '/^keyFile:/{print $2}' | tr -d '[:space:]')
+    panel_port="${panel_port:-2053}"
+    base_path="${base_path:-/}"
+    [[ "$base_path" != /* ]] && base_path="/${base_path}"
+    [[ "$base_path" != */ ]] && base_path="${base_path}/"
+    backend_scheme="http"
+    [[ -s "$cert_config" && -s "$key_config" ]] && backend_scheme="https"
+    backend_url="${backend_scheme}://127.0.0.1:${panel_port}"
+
+    read -rp "请输入管理后台域名（例如 admin.example.com）：" panel_domain
+    panel_domain="${panel_domain// /}"
+    if ! is_domain "$panel_domain"; then
+        echo -e "${red}域名格式不正确。${plain}"
+        return 1
+    fi
+    conf_path="/etc/nginx/conf.d/3x-ui-admin-panel.conf"
+    reverse_proxy_domain_in_use "$panel_domain" "$conf_path" && return 1
+    previous_conf=$(mktemp)
+    had_previous="false"
+    if [[ -f "$conf_path" ]]; then
+        cp -p "$conf_path" "$previous_conf"
+        had_previous="true"
+    fi
+
+    temp_conf=$(mktemp)
+    cat > "$temp_conf" <<EOF
+# Temporary HTTP endpoint generated for automatic ACME validation.
+server {
+    listen 80;
+    server_name ${panel_domain};
+    location ^~ /.well-known/acme-challenge/ { root /var/www/3x-ui-acme; default_type text/plain; try_files \$uri =404; }
+    location / { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-reverse-proxy.conf; }
+}
+EOF
+    if ! apply_reverse_proxy_config "$temp_conf" "$conf_path"; then
+        rm -f "$previous_conf"
+        return 1
+    fi
+    if ! ensure_reverse_proxy_certificate "$panel_domain"; then
+        restore_reverse_proxy_previous "$conf_path" "$previous_conf" "$had_previous"
+        return 1
+    fi
+
+    temp_conf=$(mktemp)
+    cat > "$temp_conf" <<EOF
+# Administration panel only. Public HTTPS terminates at Nginx.
+server {
+    listen 80;
+    server_name ${panel_domain};
+    location ^~ /.well-known/acme-challenge/ { root /var/www/3x-ui-acme; default_type text/plain; try_files \$uri =404; }
+    location / { return 301 https://\$host\$request_uri; }
+}
+server {
+    listen 443 ssl http2;
+    server_name ${panel_domain};
+    ssl_certificate ${REVERSE_PROXY_CERT_FILE};
+    ssl_certificate_key ${REVERSE_PROXY_KEY_FILE};
+    location = / { return 302 ${base_path}; }
+    location / { proxy_pass ${backend_url}; include /etc/nginx/snippets/3x-ui-reverse-proxy.conf; }
+}
+EOF
+    if ! apply_reverse_proxy_config "$temp_conf" "$conf_path"; then
+        restore_reverse_proxy_previous "$conf_path" "$previous_conf" "$had_previous"
+        return 1
+    fi
+    if ! ${xui_folder}/x-ui setting -listenIP 127.0.0.1 > /dev/null 2>&1; then
+        echo -e "${red}反代已生成，但后台本地监听设置写入失败。${plain}"
+        restore_reverse_proxy_previous "$conf_path" "$previous_conf" "$had_previous"
+        return 1
+    fi
+    rm -f "$previous_conf"
+    restart
+    echo -e "${green}管理后台反代配置完成：https://${panel_domain}${base_path}${plain}"
+    echo -e "${blue}后端仅监听：127.0.0.1:${panel_port}${plain}"
 }
 
 show_menu() {
