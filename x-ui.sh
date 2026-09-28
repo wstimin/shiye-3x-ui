@@ -2950,7 +2950,7 @@ pg_install_local() {
         opensuse-tumbleweed | opensuse-leap)
             zypper -q install -y postgresql-server postgresql-contrib >&2 || return 1
             if [[ ! -f /var/lib/pgsql/data/PG_VERSION ]]; then
-                install -d -o postgres -g postgres -m 700 /var/lib/pgsql/data >&2 || return 1
+                command install -d -o postgres -g postgres -m 700 /var/lib/pgsql/data >&2 || return 1
                 su - postgres -c "initdb -D /var/lib/pgsql/data" >&2 || return 1
             fi
             ;;
@@ -3146,7 +3146,7 @@ pg_upgrade_client() {
 pg_write_env() {
     local dsn="$1" envfile
     envfile="$(xui_env_file_path)"
-    install -d -m 755 "$(dirname "$envfile")"
+    command install -d -m 755 "$(dirname "$envfile")"
     touch "$envfile"
     sed -i '/^XUI_DB_TYPE=/d; /^XUI_DB_DSN=/d' "$envfile"
     {
@@ -3683,7 +3683,10 @@ reload_reverse_proxy_nginx() {
 }
 
 write_reverse_proxy_snippet() {
-    install -d -m 755 /etc/nginx/snippets /var/www/3x-ui-acme/.well-known/acme-challenge
+    # `install` is also the name of this script's panel-install function.
+    # Bypass shell functions so these are filesystem operations, never a panel
+    # reinstall/download.
+    command install -d -m 755 /etc/nginx/snippets /var/www/3x-ui-acme/.well-known/acme-challenge
     cat > /etc/nginx/snippets/3x-ui-reverse-proxy.conf <<'EOF'
 proxy_http_version 1.1;
 proxy_set_header Upgrade $http_upgrade;
@@ -3708,7 +3711,7 @@ apply_reverse_proxy_config() {
         backup_path="${conf_path}.rollback"
         cp -p "$conf_path" "$backup_path"
     fi
-    install -m 644 "$temp_conf" "$conf_path"
+    command install -m 644 "$temp_conf" "$conf_path"
     rm -f "$temp_conf"
     local nginx_dump
     nginx_dump=$("$REVERSE_PROXY_NGINX_BIN" -T 2>&1)
@@ -3732,7 +3735,7 @@ restore_reverse_proxy_previous() {
     local previous_conf="$2"
     local had_previous="$3"
     if [[ "$had_previous" == "true" ]]; then
-        install -m 644 "$previous_conf" "$conf_path"
+        command install -m 644 "$previous_conf" "$conf_path"
     else
         rm -f "$conf_path"
     fi
