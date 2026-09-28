@@ -86,6 +86,12 @@ export default function PortalLogin({ plans, onDone }: PortalLoginProps) {
   const currentLanguage = LanguageManager.supportedLanguages.find((item) => item.value === lang);
   const direction = lang === 'fa-IR' || lang === 'ar-EG' ? 'rtl' : 'ltr';
   const title = plans?.siteTitle || t('portal.defaultTitle');
+  const heroTitle = t('portal.loginHeroTitle');
+  const heroTitleBreak = heroTitle.indexOf('，');
+  const heroTitleLines =
+    heroTitleBreak >= 0
+      ? [heroTitle.slice(0, heroTitleBreak + 1), heroTitle.slice(heroTitleBreak + 1)]
+      : [heroTitle];
 
   return (
     <ConfigProvider theme={portalTheme} direction={direction}>
@@ -94,11 +100,18 @@ export default function PortalLogin({ plans, onDone }: PortalLoginProps) {
         <Layout.Content className="portal-content portal-login-content">
           <div className="portal-login-orb portal-login-orb-one" aria-hidden="true" />
           <div className="portal-login-orb portal-login-orb-two" aria-hidden="true" />
+          <div className="portal-login-ribbon portal-login-ribbon-one" aria-hidden="true" />
+          <div className="portal-login-ribbon portal-login-ribbon-two" aria-hidden="true" />
+          <div className="portal-login-monogram" aria-hidden="true">
+            <PortalBrandMark />
+          </div>
           <div className="portal-login-orbit" aria-hidden="true">
             <span className="portal-login-orbit-ring portal-login-orbit-ring-one" />
             <span className="portal-login-orbit-ring portal-login-orbit-ring-two" />
             <span className="portal-login-orbit-node portal-login-orbit-node-one" />
             <span className="portal-login-orbit-node portal-login-orbit-node-two" />
+            <span className="portal-login-orbit-node portal-login-orbit-node-three" />
+            <span className="portal-login-orbit-node portal-login-orbit-node-four" />
           </div>
           <div className="portal-login-layout">
             <section className="portal-login-story" aria-label={title}>
@@ -115,7 +128,11 @@ export default function PortalLogin({ plans, onDone }: PortalLoginProps) {
                 <span className="portal-login-eyebrow">
                   <PortalStatusIcon /> {t('portal.loginStatus')}
                 </span>
-                <h1>{t('portal.loginHeroTitle')}</h1>
+                <h1>
+                  {heroTitleLines.map((line) => (
+                    <span key={line}>{line}</span>
+                  ))}
+                </h1>
                 <p>{t('portal.loginHeroDescription')}</p>
               </div>
               <div className="portal-login-benefits">
@@ -239,6 +256,13 @@ export default function PortalLogin({ plans, onDone }: PortalLoginProps) {
               </p>
             </section>
           </div>
+          <footer className="portal-login-footer" aria-hidden="true">
+            <span />
+            <b>
+              {title} · {t('portal.loginBrandCaption')}
+            </b>
+            <span />
+          </footer>
         </Layout.Content>
       </Layout>
     </ConfigProvider>
