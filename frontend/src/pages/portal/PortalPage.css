@@ -212,6 +212,56 @@
   animation: portal-orb-drift 22s ease-in-out -5s infinite reverse;
 }
 
+.portal-login-orbit {
+  position: absolute;
+  z-index: 1;
+  top: 8%;
+  left: clamp(34px, 5vw, 92px);
+  width: clamp(260px, 32vw, 480px);
+  aspect-ratio: 1;
+  pointer-events: none;
+  opacity: 0.52;
+  animation: portal-orbit-turn 28s linear infinite;
+}
+
+.portal-login-orbit-ring,
+.portal-login-orbit-node {
+  position: absolute;
+  border-radius: 999px;
+}
+
+.portal-login-orbit-ring {
+  border: 1px solid rgba(93, 111, 226, 0.1);
+}
+
+.portal-login-orbit-ring-one {
+  inset: 8%;
+}
+
+.portal-login-orbit-ring-two {
+  inset: 24%;
+  border-color: rgba(38, 183, 179, 0.1);
+}
+
+.portal-login-orbit-node {
+  width: 8px;
+  height: 8px;
+  background: #6376ed;
+  box-shadow: 0 0 0 7px rgba(99, 118, 237, 0.08);
+}
+
+.portal-login-orbit-node-one {
+  top: 18%;
+  right: 17%;
+}
+
+.portal-login-orbit-node-two {
+  bottom: 25%;
+  left: 22%;
+  background: #20b8ad;
+  box-shadow: 0 0 0 7px rgba(32, 184, 173, 0.08);
+}
+
 .portal-login-layout {
   position: relative;
   z-index: 2;
@@ -236,6 +286,7 @@
   display: flex;
   align-items: center;
   gap: 16px;
+  animation: portal-login-reveal 260ms var(--portal-ease) 40ms both;
 }
 
 .portal-login-logo {
@@ -254,6 +305,41 @@
 .portal-login-logo svg {
   width: 44px;
   height: 44px;
+}
+
+.portal-login-logo .portal-brand-route {
+  transform-origin: center;
+  animation: portal-brand-route-in 420ms var(--portal-ease) 90ms both;
+}
+
+.portal-login-logo .portal-brand-node {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: portal-brand-node-in 300ms var(--portal-ease) both;
+}
+
+.portal-login-logo .portal-brand-node-one {
+  animation-delay: 170ms;
+}
+
+.portal-login-logo .portal-brand-node-two {
+  animation-delay: 215ms;
+}
+
+.portal-login-logo .portal-brand-node-three {
+  animation-delay: 260ms;
+}
+
+.portal-login-logo .portal-brand-node-four {
+  animation-delay: 305ms;
+}
+
+.portal-login-logo .portal-brand-core {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation:
+    portal-brand-node-in 300ms var(--portal-ease) 350ms both,
+    portal-brand-breathe 3.8s ease-in-out 900ms infinite;
 }
 
 .portal-login-brand > span:last-child {
@@ -281,6 +367,7 @@
 .portal-login-story-copy {
   max-width: 560px;
   margin-block: clamp(58px, 8vh, 88px) 48px;
+  animation: portal-login-reveal 280ms var(--portal-ease) 105ms both;
 }
 
 .portal-login-eyebrow {
@@ -331,6 +418,19 @@
   gap: 10px;
   color: #273650;
   font-size: 13px;
+  animation: portal-login-reveal 240ms var(--portal-ease) both;
+}
+
+.portal-login-benefits > span:nth-child(1) {
+  animation-delay: 165ms;
+}
+
+.portal-login-benefits > span:nth-child(2) {
+  animation-delay: 215ms;
+}
+
+.portal-login-benefits > span:nth-child(3) {
+  animation-delay: 265ms;
 }
 
 .portal-login-benefits i {
@@ -342,6 +442,7 @@
   background: rgba(255, 255, 255, 0.74);
   box-shadow: 0 8px 24px rgba(46, 65, 119, 0.08);
   font-style: normal;
+  transition: transform 180ms var(--portal-ease);
 }
 
 .portal-login-benefits i svg {
@@ -359,6 +460,12 @@
 
 .portal-login-benefits .is-teal {
   color: #16aea6;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .portal-login-benefits > span:hover i {
+    transform: translateY(-3px);
+  }
 }
 
 .portal-login-card {
@@ -2101,6 +2208,57 @@
   }
 }
 
+@keyframes portal-orbit-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes portal-login-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes portal-brand-route-in {
+  from {
+    opacity: 0;
+    transform: scale(0.84) rotate(-5deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes portal-brand-node-in {
+  from {
+    opacity: 0;
+    transform: scale(0.35);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes portal-brand-breathe {
+  0%,
+  100% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+}
+
 @keyframes portal-login-enter {
   from {
     opacity: 0;
@@ -2451,6 +2609,15 @@
     display: none;
   }
 
+  .portal-login-orbit {
+    top: -30px;
+    left: 50%;
+    width: min(82vw, 420px);
+    transform: translateX(-50%);
+    opacity: 0.34;
+    animation: none;
+  }
+
   .portal-login-card {
     min-height: 0;
     padding: 38px 34px 31px;
@@ -2537,12 +2704,23 @@
   .portal-login-layout,
   .portal-login-card,
   .portal-login-orb,
+  .portal-login-orbit,
+  .portal-login-logo .portal-brand-route,
+  .portal-login-logo .portal-brand-node,
+  .portal-login-logo .portal-brand-core,
   .portal-loading-mark,
   .x-user-center .portal-view,
   .x-user-center .portal-node-pulse i,
   .x-user-center .portal-hero-core,
   .x-user-center .portal-orbit-two {
     animation: none;
+  }
+
+  .portal-login-brand,
+  .portal-login-story-copy,
+  .portal-login-benefits > span,
+  .portal-login-card {
+    animation: portal-login-fade 160ms ease both;
   }
 
   .x-user-center .sidebar-nav-item,
@@ -2552,7 +2730,20 @@
   .x-user-center .portal-quick-actions button,
   .x-user-center .portal-node-row,
   .x-user-center .portal-purchase-card,
-  .x-user-center .portal-mobile-nav button {
+  .x-user-center .portal-mobile-nav button,
+  .portal-login-benefits i,
+  .portal-login-language,
+  .portal-login-card .portal-form .ant-btn-primary,
+  .portal-login-submit-icon {
     transition-duration: 0ms;
+  }
+}
+
+@keyframes portal-login-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }

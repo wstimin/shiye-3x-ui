@@ -21,17 +21,42 @@ export function PortalBrandMark({ className }: PortalIconProps) {
         </linearGradient>
       </defs>
       <path
+        className="portal-brand-route"
         d="M14 14 42 42M42 14 14 42"
         fill="none"
         stroke="url(#portal-brand-gradient)"
         strokeLinecap="round"
         strokeWidth="6"
       />
-      <circle cx="14" cy="14" r="6" fill="#3b82f6" />
-      <circle cx="42" cy="14" r="6" fill="#37b8bd" />
-      <circle cx="14" cy="42" r="6" fill="#735bea" />
-      <circle cx="42" cy="42" r="6" fill="#32bfc3" />
-      <circle cx="28" cy="28" r="6.5" fill="#5b67e8" />
+      <circle
+        className="portal-brand-node portal-brand-node-one"
+        cx="14"
+        cy="14"
+        r="6"
+        fill="#3b82f6"
+      />
+      <circle
+        className="portal-brand-node portal-brand-node-two"
+        cx="42"
+        cy="14"
+        r="6"
+        fill="#37b8bd"
+      />
+      <circle
+        className="portal-brand-node portal-brand-node-three"
+        cx="14"
+        cy="42"
+        r="6"
+        fill="#735bea"
+      />
+      <circle
+        className="portal-brand-node portal-brand-node-four"
+        cx="42"
+        cy="42"
+        r="6"
+        fill="#32bfc3"
+      />
+      <circle className="portal-brand-core" cx="28" cy="28" r="6.5" fill="#5b67e8" />
     </svg>
   );
 }

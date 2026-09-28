@@ -94,6 +94,12 @@ export default function PortalLogin({ plans, onDone }: PortalLoginProps) {
         <Layout.Content className="portal-content portal-login-content">
           <div className="portal-login-orb portal-login-orb-one" aria-hidden="true" />
           <div className="portal-login-orb portal-login-orb-two" aria-hidden="true" />
+          <div className="portal-login-orbit" aria-hidden="true">
+            <span className="portal-login-orbit-ring portal-login-orbit-ring-one" />
+            <span className="portal-login-orbit-ring portal-login-orbit-ring-two" />
+            <span className="portal-login-orbit-node portal-login-orbit-node-one" />
+            <span className="portal-login-orbit-node portal-login-orbit-node-two" />
+          </div>
           <div className="portal-login-layout">
             <section className="portal-login-story" aria-label={title}>
               <div className="portal-login-brand">
