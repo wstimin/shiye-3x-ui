@@ -174,7 +174,7 @@
   place-items: center;
   min-height: 100vh;
   overflow: hidden;
-  padding: clamp(34px, 5vh, 58px) clamp(34px, 4.6vw, 88px);
+  padding: clamp(30px, 4vh, 46px) clamp(28px, 4vw, 64px);
   background:
     radial-gradient(circle at 12% 9%, rgba(103, 120, 239, 0.13), transparent 25%),
     radial-gradient(circle at 91% 18%, rgba(34, 197, 202, 0.14), transparent 28%),
@@ -257,9 +257,9 @@
 .portal-login-monogram {
   position: absolute;
   z-index: 1;
-  left: 44%;
-  top: 52%;
-  width: clamp(480px, 44vw, 820px);
+  left: calc(50% - 120px);
+  top: 54%;
+  width: clamp(460px, 38vw, 680px);
   color: #6572ed;
   opacity: 0.13;
   pointer-events: none;
@@ -276,9 +276,9 @@
 .portal-login-orbit {
   position: absolute;
   z-index: 1;
-  top: -42%;
-  left: -8%;
-  width: clamp(760px, 82vw, 1440px);
+  top: -46%;
+  left: calc(50% - 850px);
+  width: clamp(760px, 76vw, 1320px);
   aspect-ratio: 1;
   pointer-events: none;
   opacity: 0.46;
@@ -345,10 +345,11 @@
   position: relative;
   z-index: 2;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(480px, 520px);
+  grid-template-columns: minmax(500px, 560px) minmax(410px, 440px);
   align-items: center;
-  gap: clamp(48px, 5vw, 92px);
-  width: min(1660px, 100%);
+  justify-content: center;
+  gap: clamp(54px, 4.5vw, 64px);
+  width: min(1080px, 100%);
 }
 
 .portal-login-story {
@@ -357,8 +358,8 @@
   flex-direction: column;
   justify-content: flex-start;
   min-width: 0;
-  min-height: min(720px, calc(100vh - 118px));
-  padding: 20px 4px 6px;
+  min-height: min(620px, calc(100vh - 96px));
+  padding: 14px 0 4px;
   color: var(--portal-ink);
 }
 
@@ -372,14 +373,14 @@
 .portal-login-logo {
   display: grid;
   place-items: center;
-  flex: 0 0 72px;
-  width: 72px;
-  height: 72px;
+  flex: 0 0 64px;
+  width: 64px;
+  height: 64px;
 }
 
 .portal-login-logo svg {
-  width: 70px;
-  height: 70px;
+  width: 62px;
+  height: 62px;
 }
 
 .portal-login-logo .portal-brand-route {
@@ -424,10 +425,10 @@
 }
 
 .portal-login-brand strong {
-  max-width: 430px;
+  max-width: 420px;
   overflow: hidden;
   color: #12203c;
-  font-size: clamp(28px, 2.2vw, 38px);
+  font-size: clamp(28px, 2vw, 35px);
   font-weight: 820;
   letter-spacing: -0.035em;
   text-overflow: ellipsis;
@@ -436,12 +437,12 @@
 
 .portal-login-brand small {
   color: #71809a;
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .portal-login-story-copy {
-  max-width: 760px;
-  margin-block: clamp(54px, 7vh, 82px) 0;
+  max-width: 600px;
+  margin-block: clamp(46px, 6vh, 66px) 0;
   animation: portal-login-reveal 280ms var(--portal-ease) 105ms both;
 }
 
@@ -464,13 +465,13 @@
 }
 
 .portal-login-story-copy h1 {
-  max-width: 760px;
-  margin: 24px 0 19px;
+  max-width: 600px;
+  margin: 22px 0 17px;
   color: #10203e;
-  font-size: clamp(52px, 4.1vw, 74px);
+  font-size: clamp(50px, 3.7vw, 66px);
   font-weight: 820;
-  line-height: 1.08;
-  letter-spacing: -0.055em;
+  line-height: 1.1;
+  letter-spacing: -0.05em;
 }
 
 .portal-login-story-copy h1 span {
@@ -478,21 +479,21 @@
 }
 
 .portal-login-story-copy p {
-  max-width: 700px;
+  max-width: 560px;
   margin: 0;
   color: #66758f;
-  font-size: clamp(16px, 1.2vw, 20px);
-  line-height: 1.75;
+  font-size: clamp(15px, 1.08vw, 18px);
+  line-height: 1.7;
 }
 
 .portal-login-benefits {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
-  width: min(780px, 100%);
+  width: min(560px, 100%);
   max-width: none;
   margin-top: auto;
-  padding: 24px 28px;
+  padding: 18px 20px;
   border: 1px solid rgba(255, 255, 255, 0.82);
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.5);
@@ -506,9 +507,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 14px;
+  gap: 10px;
   color: #273650;
-  font-size: 15px;
+  font-size: 13px;
+  white-space: nowrap;
   animation: portal-login-reveal 240ms var(--portal-ease) both;
 }
 
@@ -531,10 +533,10 @@
 .portal-login-benefits i {
   display: grid;
   place-items: center;
-  flex: 0 0 46px;
-  width: 46px;
-  height: 46px;
-  border-radius: 14px;
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
   background: rgba(255, 255, 255, 0.74);
   box-shadow: 0 8px 24px rgba(46, 65, 119, 0.08);
   font-style: normal;
@@ -568,13 +570,14 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  min-height: min(720px, calc(100vh - 118px));
-  padding: 54px 56px 46px;
+  width: 100%;
+  min-height: min(620px, calc(100vh - 96px));
+  padding: 46px 44px 38px;
   border: 1px solid rgba(255, 255, 255, 0.9);
-  border-radius: 32px;
+  border-radius: 30px;
   background: rgba(255, 255, 255, 0.88);
   box-shadow:
-    0 38px 96px rgba(36, 61, 122, 0.16),
+    0 32px 82px rgba(36, 61, 122, 0.15),
     0 4px 16px rgba(37, 54, 101, 0.05),
     inset 0 0 0 1px rgba(211, 222, 241, 0.48);
   backdrop-filter: blur(24px) saturate(132%);
@@ -586,7 +589,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 45px;
+  margin-bottom: 36px;
 }
 
 .portal-login-card-kicker {
@@ -598,7 +601,7 @@
 .portal-login-card-head h2 {
   margin: 10px 0 10px;
   color: #12203c;
-  font-size: 39px;
+  font-size: 36px;
   font-weight: 820;
   line-height: 1.2;
   letter-spacing: -0.035em;
@@ -607,7 +610,7 @@
 .portal-login-card-head p {
   margin: 0;
   color: var(--portal-muted);
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.6;
 }
 
@@ -665,7 +668,7 @@
 }
 
 .portal-login-card .portal-form .ant-input-affix-wrapper {
-  min-height: 60px;
+  min-height: 56px;
   padding-inline: 15px;
   border-color: #d9e2ef;
   border-radius: 15px;
@@ -715,7 +718,7 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  min-height: 60px;
+  min-height: 56px;
   margin-top: 12px;
   border-radius: 15px;
   background: linear-gradient(105deg, #3894f5 0%, #5469ed 54%, #7b45ef 100%);
@@ -758,7 +761,7 @@
   align-items: center;
   justify-content: center;
   gap: 9px;
-  margin: 37px 0 0;
+  margin: 30px 0 0;
   color: #7b89a0;
   font-size: 11px;
   text-align: center;
@@ -2731,30 +2734,31 @@
   }
 }
 
-@media (max-width: 1240px) and (min-width: 861px) {
+@media (max-width: 1240px) and (min-width: 1041px) {
   .portal-login-layout {
-    grid-template-columns: minmax(0, 1fr) minmax(440px, 470px);
-    gap: 40px;
+    grid-template-columns: minmax(460px, 500px) minmax(400px, 420px);
+    gap: clamp(40px, 4vw, 50px);
+    width: min(970px, 100%);
   }
 
   .portal-login-story-copy h1 {
-    font-size: clamp(46px, 5.3vw, 62px);
+    font-size: clamp(48px, 5vw, 58px);
   }
 
   .portal-login-brand strong {
-    font-size: 30px;
+    font-size: 29px;
   }
 
   .portal-login-card {
-    padding-inline: 44px;
+    padding-inline: 40px;
   }
 
   .portal-login-benefits {
-    padding-inline: 20px;
+    padding-inline: 16px;
   }
 }
 
-@media (max-width: 860px) {
+@media (max-width: 1040px) {
   .portal-login-content {
     padding: 28px 20px;
   }
