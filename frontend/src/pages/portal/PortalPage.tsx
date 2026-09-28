@@ -59,6 +59,7 @@ import {
   type PortalTxn,
 } from './portalModel';
 import PortalLogin, { PortalLoading } from './PortalLogin';
+import { PortalBrandMark } from './PortalLoginIcons';
 import { portalTheme } from './portalTheme';
 import './PortalPage.css';
 import '../sub/SubPage.css';
@@ -547,7 +548,7 @@ export default function PortalPage() {
         >
           <div className="sidebar-brand">
             <span className="sidebar-logo" aria-hidden="true">
-              <SafetyCertificateFilled />
+              <PortalBrandMark />
             </span>
             <span className="sidebar-brand-copy">
               <strong>{siteTitle}</strong>

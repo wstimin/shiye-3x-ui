@@ -660,11 +660,15 @@
   width: 38px;
   height: 38px;
   border-radius: 13px;
-  color: #fff;
-  background: linear-gradient(145deg, #4a6fe5, #7259d9 56%, #17a8b5);
-  box-shadow: 0 10px 24px rgba(65, 89, 196, 0.25);
-  font-size: 18px;
-  font-weight: 800;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow:
+    0 9px 24px rgba(55, 78, 151, 0.12),
+    inset 0 0 0 1px rgba(221, 228, 242, 0.88);
+}
+
+.x-user-center .sidebar-logo svg {
+  width: 31px;
+  height: 31px;
 }
 
 .x-user-center .sidebar-brand-copy {
