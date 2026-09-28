@@ -3535,15 +3535,97 @@ customer_portal_secure_mode() {
 
 # Generate a portal-only reverse proxy to the independent portal listener.
 # Panel routes are never registered on that listener and return 404.
-customer_portal_proxy_menu() {
+ensure_customer_portal_nginx() {
     if ! command -v nginx > /dev/null 2>&1; then
-        echo -e "${yellow}未检测到 Nginx。请先安装 Nginx，再运行此菜单。${plain}"
-        echo -e "${yellow}Debian/Ubuntu：apt-get update && apt-get install -y nginx${plain}"
-        echo -e "${yellow}CentOS/RHEL：dnf install -y nginx${plain}"
-        return 0
+        echo -e "${yellow}未检测到 Nginx，正在根据当前系统自动安装...${plain}"
+        case "${release}" in
+            ubuntu | debian | armbian)
+                DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y nginx
+                ;;
+            fedora | amzn | virtuozzo | rhel | almalinux | rocky | ol)
+                dnf makecache -y && dnf install -y nginx
+                ;;
+            centos)
+                if command -v dnf > /dev/null 2>&1; then
+                    dnf makecache -y && dnf install -y nginx
+                else
+                    yum makecache -y && yum install -y nginx
+                fi
+                ;;
+            arch | manjaro | parch)
+                pacman -Sy --noconfirm nginx
+                ;;
+            opensuse-tumbleweed | opensuse-leap)
+                zypper refresh && zypper -q install -y nginx
+                ;;
+            alpine)
+                apk update && apk add nginx
+                ;;
+            *)
+                echo -e "${red}当前系统暂不支持自动安装 Nginx：${release}${plain}"
+                return 1
+                ;;
+        esac
+        if ! command -v nginx > /dev/null 2>&1; then
+            echo -e "${red}Nginx 自动安装失败，请检查软件源和网络后重试。${plain}"
+            return 1
+        fi
+        echo -e "${green}Nginx 安装完成。${plain}"
     fi
 
-    local settings portal_port portal_listen portal_enabled portal_domain conf_path cert_file key_file custom_cert custom_key temp_conf backend_scheme backend_host backend_url cert_config key_config public_scheme public_url
+    if command -v systemctl > /dev/null 2>&1; then
+        systemctl enable nginx > /dev/null 2>&1 || true
+        systemctl start nginx > /dev/null 2>&1 || true
+    elif command -v rc-update > /dev/null 2>&1; then
+        rc-update add nginx default > /dev/null 2>&1 || true
+        rc-service nginx start > /dev/null 2>&1 || true
+    fi
+    return 0
+}
+
+reload_customer_portal_nginx() {
+    if command -v systemctl > /dev/null 2>&1 && systemctl is-active nginx > /dev/null 2>&1; then
+        systemctl reload nginx > /dev/null 2>&1
+        return $?
+    fi
+    if command -v rc-service > /dev/null 2>&1 && rc-service nginx status > /dev/null 2>&1; then
+        rc-service nginx reload > /dev/null 2>&1
+        return $?
+    fi
+    if nginx -s reload > /dev/null 2>&1; then
+        return 0
+    fi
+    nginx > /dev/null 2>&1
+}
+
+register_customer_portal_certificate_reload() {
+    local domain="$1"
+    local cert_file="$2"
+    local key_file="$3"
+    local reload_cmd="systemctl reload nginx 2>/dev/null || nginx -s reload; systemctl restart x-ui 2>/dev/null || rc-service x-ui restart 2>/dev/null"
+
+    if [[ "$cert_file" == /etc/letsencrypt/* || "$key_file" == /etc/letsencrypt/* ]]; then
+        install -d -m 755 /etc/letsencrypt/renewal-hooks/deploy
+        cat > /etc/letsencrypt/renewal-hooks/deploy/3x-ui-customer-portal <<'EOF'
+#!/bin/sh
+systemctl reload nginx 2>/dev/null || nginx -s reload 2>/dev/null || true
+systemctl restart x-ui 2>/dev/null || rc-service x-ui restart 2>/dev/null || true
+EOF
+        chmod 755 /etc/letsencrypt/renewal-hooks/deploy/3x-ui-customer-portal
+        echo -e "${green}已注册证书续期钩子：续期后自动重载 Nginx 和面板。${plain}"
+    elif command -v ~/.acme.sh/acme.sh > /dev/null 2>&1 && ~/.acme.sh/acme.sh --list 2> /dev/null | awk '{print $1}' | grep -Fxq "$domain"; then
+        ~/.acme.sh/acme.sh --installcert --force -d "$domain" \
+            --key-file "$key_file" \
+            --fullchain-file "$cert_file" \
+            --reloadcmd "$reload_cmd" > /dev/null 2>&1 || true
+        echo -e "${green}已注册 acme.sh 自动续期后的 Nginx 和面板重载。${plain}"
+    fi
+}
+
+customer_portal_proxy_menu() {
+    ensure_customer_portal_nginx || return 1
+
+    local settings portal_port portal_listen portal_enabled portal_domain conf_path cert_file key_file custom_cert custom_key temp_conf backend_scheme backend_host backend_url cert_config key_config public_scheme public_url sync_panel panel_cert_updated portal_setting_saved
     settings=$(${xui_folder}/x-ui setting -show true 2>/dev/null)
     portal_port=$(echo "$settings" | awk -F': ' '/^portalPort:/{print $2}' | tr -d '[:space:]')
     portal_listen=$(echo "$settings" | awk -F': ' '/^portalListen:/{print $2}' | tr -d '[:space:]')
@@ -3574,14 +3656,37 @@ customer_portal_proxy_menu() {
 
     cert_file="/etc/letsencrypt/live/${portal_domain}/fullchain.pem"
     key_file="/etc/letsencrypt/live/${portal_domain}/privkey.pem"
+    if [[ -s "/root/cert/${portal_domain}/fullchain.pem" && -s "/root/cert/${portal_domain}/privkey.pem" ]]; then
+        cert_file="/root/cert/${portal_domain}/fullchain.pem"
+        key_file="/root/cert/${portal_domain}/privkey.pem"
+        echo -e "${green}已自动找到面板申请的域名证书：${cert_file}${plain}"
+    elif [[ -s "$cert_file" && -s "$key_file" ]]; then
+        echo -e "${green}已自动找到 Let's Encrypt 域名证书：${cert_file}${plain}"
+    fi
     read -rp "证书 fullchain 路径（没有证书可留空，先生成 HTTP 配置）：" custom_cert
     read -rp "证书私钥路径（没有证书可留空）：" custom_key
     [[ -n "$custom_cert" ]] && cert_file="$custom_cert"
     [[ -n "$custom_key" ]] && key_file="$custom_key"
 
+    panel_cert_updated="false"
+    if [[ -s "$cert_file" && -s "$key_file" ]]; then
+        read -rp "检测到有效证书，是否同时应用到 X-UI 面板 HTTPS？[Y/n]：" sync_panel
+        if [[ ! "$sync_panel" =~ ^[Nn]$ ]]; then
+            if ${xui_folder}/x-ui cert -webCert "$cert_file" -webCertKey "$key_file" > /dev/null 2>&1; then
+                panel_cert_updated="true"
+                backend_scheme="https"
+                backend_url="${backend_scheme}://${backend_host}:${portal_port}"
+                register_customer_portal_certificate_reload "$portal_domain" "$cert_file" "$key_file"
+                echo -e "${green}证书已同步到 X-UI 面板，配置完成后将自动重启生效。${plain}"
+            else
+                echo -e "${yellow}证书可供 Nginx 使用，但写入面板失败；将保留面板当前证书配置。${plain}"
+            fi
+        fi
+    fi
+
     conf_path="/etc/nginx/conf.d/3x-ui-customer-portal.conf"
     temp_conf=$(mktemp)
-    if [[ -f "$cert_file" && -f "$key_file" ]]; then
+    if [[ -s "$cert_file" && -s "$key_file" ]]; then
         public_scheme="https"
         cat > "$temp_conf" <<EOF
 # Generated by x-ui customer portal menu. Proxies only to the independent portal listener.
@@ -3641,11 +3746,18 @@ EOF
     install -m 644 "$temp_conf" "$conf_path"
     rm -f "$temp_conf"
     if nginx -t; then
-        systemctl reload nginx > /dev/null 2>&1 || nginx -s reload
+        if ! reload_customer_portal_nginx; then
+            echo -e "${red}Nginx 配置校验成功，但服务启动或重载失败，请查看 Nginx 日志。${plain}"
+            return 1
+        fi
         public_url="${public_scheme}://${portal_domain}/portal"
+        portal_setting_saved="false"
         if ! ${xui_folder}/x-ui setting -portalPublicUrl "$public_url" > /dev/null 2>&1; then
             echo -e "${yellow}Nginx 已生效，但门户公开地址写入数据库失败，请在后台手动填写：${public_url}${plain}"
         else
+            portal_setting_saved="true"
+        fi
+        if [[ "$panel_cert_updated" == "true" || "$portal_setting_saved" == "true" ]]; then
             restart
         fi
         echo -e "${green}客户门户反向代理已写入：${plain}${conf_path}"
