@@ -157,7 +157,7 @@ func SyncManagedSubscriptionProxyPort(port int) error {
 	if !managedSubscriptionUpstreamPattern.Match(original) {
 		return fmt.Errorf("managed subscription upstream marker is missing; configure the customer domain again")
 	}
-	updated := managedSubscriptionUpstreamPattern.ReplaceAllString(original, `${1}`+strconv.Itoa(port)+`${2}`)
+	updated := managedSubscriptionUpstreamPattern.ReplaceAll(original, []byte(`${1}`+strconv.Itoa(port)+`${2}`))
 	if string(updated) == string(original) {
 		return nil
 	}
