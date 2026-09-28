@@ -1001,8 +1001,6 @@ update_x-ui() {
         _fail "ERROR: Current x-ui version: unknown"
     fi
 
-    echo -e "${green}Downloading new x-ui version...${plain}"
-
     # XUI_UPDATE_TAG lets the panel target a specific release tag (e.g. the
     # rolling dev-latest pre-release). Empty keeps the default latest-stable flow.
     if [[ -n "${XUI_UPDATE_TAG}" ]]; then
@@ -1014,6 +1012,13 @@ update_x-ui() {
             _fail "ERROR: Failed to fetch x-ui version, it may be due to GitHub API restrictions, please try it later"
         fi
     fi
+    target_xui_version="${tag_version#v}"
+    current_xui_version="${current_xui_version#v}"
+    if [[ "${tag_version}" != "dev-latest" && "${current_xui_version}" == "${target_xui_version}" ]]; then
+        echo -e "${green}当前已是最新版本 ${tag_version}，无需重复下载安装包。${plain}"
+        return 0
+    fi
+    echo -e "${green}Downloading new x-ui version...${plain}"
     echo -e "Got x-ui latest version: ${tag_version}, beginning the installation..."
     # x-ui.sh, x-ui.rc and the unit files must come from the same release as
     # the binary; only the rolling dev build tracks main.

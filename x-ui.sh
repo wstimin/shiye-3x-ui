@@ -3441,7 +3441,7 @@ customer_portal_menu() {
         read -rp "请输入选项 [0-5]: " portal_choice
         case "$portal_choice" in
             1)
-                local settings host portal_port portal_enabled portal_public_url scheme response proxy_domain proxy_scheme
+                local settings host portal_port portal_enabled portal_public_url scheme response proxy_domain proxy_scheme portal_conf admin_conf
                 settings=$(${xui_folder}/x-ui setting -show true 2>/dev/null)
                 host=""
                 for ip_address in "https://api4.ipify.org" "https://ipv4.icanhazip.com" "https://4.ident.me"; do
@@ -3463,20 +3463,22 @@ customer_portal_menu() {
                 fi
                 echo -e "${green}客户门户独立地址：${plain} ${scheme}://${host}:${portal_port}/portal"
                 echo -e "${blue}用户端口：${plain}${portal_port}（不再使用后台端口和后台路径）"
-                if [[ -f /etc/nginx/conf.d/3x-ui-customer-portal.conf ]]; then
-                    proxy_domain=$(awk '/^[[:space:]]*server_name /{print $2; exit}' /etc/nginx/conf.d/3x-ui-customer-portal.conf | tr -d ';')
+                portal_conf=$(find_reverse_proxy_conf "3x-ui-customer-portal.conf" 2>/dev/null || true)
+                if [[ -n "$portal_conf" && -f "$portal_conf" ]]; then
+                    proxy_domain=$(awk '/^[[:space:]]*server_name /{print $2; exit}' "$portal_conf" | tr -d ';')
                     proxy_scheme="http"
-                    grep -qE '^[[:space:]]*listen 443' /etc/nginx/conf.d/3x-ui-customer-portal.conf && proxy_scheme="https"
+                    grep -qE '^[[:space:]]*listen 443' "$portal_conf" && proxy_scheme="https"
                     [[ -n "$proxy_domain" ]] && echo -e "${green}独立客户域名入口：${plain} ${proxy_scheme}://${proxy_domain}/portal"
-                    if ! grep -qE "proxy_pass[[:space:]]+https?://[^;]+:${portal_port}([/;]|$)" /etc/nginx/conf.d/3x-ui-customer-portal.conf; then
+                    if ! grep -qE "proxy_pass[[:space:]]+https?://[^;]+:${portal_port}([/;]|$)" "$portal_conf"; then
                         echo -e "${yellow}检测到旧版反向代理仍指向后台端口，请运行第 3 项重新生成。${plain}"
                     fi
                 fi
-                if [[ -f /etc/nginx/conf.d/3x-ui-admin-panel.conf ]]; then
+                admin_conf=$(find_reverse_proxy_conf "3x-ui-admin-panel.conf" 2>/dev/null || true)
+                if [[ -n "$admin_conf" && -f "$admin_conf" ]]; then
                     local admin_domain admin_scheme admin_base_path
-                    admin_domain=$(awk '/^[[:space:]]*server_name /{print $2; exit}' /etc/nginx/conf.d/3x-ui-admin-panel.conf | tr -d ';')
+                    admin_domain=$(awk '/^[[:space:]]*server_name /{print $2; exit}' "$admin_conf" | tr -d ';')
                     admin_scheme="http"
-                    grep -qE '^[[:space:]]*listen 443' /etc/nginx/conf.d/3x-ui-admin-panel.conf && admin_scheme="https"
+                    grep -qE '^[[:space:]]*listen 443' "$admin_conf" && admin_scheme="https"
                     admin_base_path=$(echo "$settings" | sed -n 's/^webBasePath:[[:space:]]*//p' | head -n 1)
                     admin_base_path="${admin_base_path:-/}"
                     [[ -n "$admin_domain" ]] && echo -e "${green}管理后台域名入口：${plain} ${admin_scheme}://${admin_domain}${admin_base_path}"
@@ -3564,6 +3566,55 @@ customer_portal_secure_mode() {
 REVERSE_PROXY_CERT_FILE=""
 REVERSE_PROXY_KEY_FILE=""
 REVERSE_PROXY_NGINX_BIN=""
+REVERSE_PROXY_CONF_DIR=""
+
+resolve_reverse_proxy_conf_dir() {
+    local dir probe marker dump
+    marker="3x-ui-active-include-probe-$$"
+    # Nginx packages do not agree on one vhost directory. Debian/Ubuntu
+    # commonly load conf.d or sites-enabled, while Alpine commonly loads
+    # http.d. A directory merely existing is not evidence that nginx.conf
+    # includes it, so use a harmless temporary comment and inspect nginx -T.
+    for dir in \
+        /etc/nginx/conf.d \
+        /etc/nginx/http.d \
+        /etc/nginx/sites-enabled \
+        /usr/local/etc/nginx/conf.d \
+        /usr/local/etc/nginx/servers; do
+        [[ -d "$dir" && -w "$dir" ]] || continue
+        probe="${dir}/3x-ui-include-probe-$$.conf"
+        if ! printf '# %s\n' "$marker" > "$probe"; then
+            continue
+        fi
+        dump=$("$REVERSE_PROXY_NGINX_BIN" -T 2>&1)
+        rm -f "$probe"
+        if printf '%s\n' "$dump" | grep -Fq "$marker"; then
+            REVERSE_PROXY_CONF_DIR="$dir"
+            echo -e "${green}已识别 Nginx 生效配置目录：${REVERSE_PROXY_CONF_DIR}${plain}"
+            return 0
+        fi
+    done
+    echo -e "${red}没有找到 Nginx 实际加载且可写的虚拟主机目录。${plain}"
+    echo -e "${yellow}请检查 nginx.conf 中的 http { include ...; } 配置。${plain}"
+    return 1
+}
+
+find_reverse_proxy_conf() {
+    local name="$1"
+    local dir
+    for dir in \
+        "$REVERSE_PROXY_CONF_DIR" \
+        /etc/nginx/conf.d \
+        /etc/nginx/http.d \
+        /etc/nginx/sites-enabled \
+        /usr/local/etc/nginx/conf.d \
+        /usr/local/etc/nginx/servers; do
+        [[ -n "$dir" && -f "${dir}/${name}" ]] || continue
+        echo "${dir}/${name}"
+        return 0
+    done
+    return 1
+}
 
 ensure_reverse_proxy_nginx() {
     PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH}"
@@ -3609,6 +3660,7 @@ ensure_reverse_proxy_nginx() {
         echo -e "${red}无法确定 Nginx 可执行文件位置。${plain}"
         return 1
     fi
+    resolve_reverse_proxy_conf_dir || return 1
     if command -v systemctl > /dev/null 2>&1; then
         systemctl enable nginx > /dev/null 2>&1 || true
     elif command -v rc-update > /dev/null 2>&1; then
@@ -3658,11 +3710,14 @@ apply_reverse_proxy_config() {
     fi
     install -m 644 "$temp_conf" "$conf_path"
     rm -f "$temp_conf"
-    if "$REVERSE_PROXY_NGINX_BIN" -t > /dev/null 2>&1 && reload_reverse_proxy_nginx; then
+    local nginx_dump
+    nginx_dump=$("$REVERSE_PROXY_NGINX_BIN" -T 2>&1)
+    if [[ $? -eq 0 ]] && printf '%s\n' "$nginx_dump" | grep -Fq "# configuration file ${conf_path}:" && reload_reverse_proxy_nginx; then
         [[ -n "$backup_path" ]] && rm -f "$backup_path"
         return 0
     fi
-    echo -e "${red}Nginx 配置校验或重载失败，正在恢复旧配置。${plain}"
+    echo -e "${red}Nginx 没有加载新配置，或配置校验/重载失败，正在恢复旧配置。${plain}"
+    printf '%s\n' "$nginx_dump" | tail -n 12
     if [[ -n "$backup_path" && -f "$backup_path" ]]; then
         mv -f "$backup_path" "$conf_path"
     else
@@ -3689,7 +3744,9 @@ reverse_proxy_domain_in_use() {
     local domain="$1"
     local own_conf="$2"
     local conf
-    for conf in /etc/nginx/conf.d/3x-ui-admin-panel.conf /etc/nginx/conf.d/3x-ui-customer-portal.conf; do
+    for conf in \
+        "${REVERSE_PROXY_CONF_DIR}/3x-ui-admin-panel.conf" \
+        "${REVERSE_PROXY_CONF_DIR}/3x-ui-customer-portal.conf"; do
         [[ "$conf" == "$own_conf" || ! -f "$conf" ]] && continue
         if awk -v wanted="$domain" '$1 == "server_name" {gsub(/;/, "", $2); if ($2 == wanted) found=1} END {exit !found}' "$conf"; then
             echo -e "${red}域名 ${domain} 已被另一项反向代理使用，请为后台和客户门户使用不同域名。${plain}"
@@ -3806,12 +3863,12 @@ customer_portal_proxy_menu() {
         echo -e "${red}域名格式不正确。${plain}"
         return 1
     fi
-    conf_path="/etc/nginx/conf.d/3x-ui-customer-portal.conf"
-    reverse_proxy_domain_in_use "$portal_domain" "$conf_path" && return 1
     # Do not install or download anything merely because the menu item was
     # opened.  Dependency checks start only after a valid domain is submitted.
     ensure_reverse_proxy_nginx || return 1
     write_reverse_proxy_snippet
+    conf_path="${REVERSE_PROXY_CONF_DIR}/3x-ui-customer-portal.conf"
+    reverse_proxy_domain_in_use "$portal_domain" "$conf_path" && return 1
     echo -e "${blue}本操作只配置反向代理与证书，不会下载或更新 X-UI 安装包。${plain}"
     previous_conf=$(mktemp)
     had_previous="false"
@@ -3879,6 +3936,7 @@ EOF
     # argument opens another main menu; the next submenu choice (especially 2)
     # can then be consumed as "update" and unexpectedly download the panel.
     restart 0
+    echo -e "${green}证书已自动部署到 Nginx，客户门户地址和本地监听设置已写入面板。${plain}"
     echo -e "${green}客户门户反代配置完成：${public_url}${plain}"
     echo -e "${blue}后端仅监听：127.0.0.1:${portal_port}${plain}"
 }
@@ -3904,12 +3962,12 @@ admin_panel_proxy_menu() {
         echo -e "${red}域名格式不正确。${plain}"
         return 1
     fi
-    conf_path="/etc/nginx/conf.d/3x-ui-admin-panel.conf"
-    reverse_proxy_domain_in_use "$panel_domain" "$conf_path" && return 1
     # Do not install or download anything merely because the menu item was
     # opened.  Dependency checks start only after a valid domain is submitted.
     ensure_reverse_proxy_nginx || return 1
     write_reverse_proxy_snippet
+    conf_path="${REVERSE_PROXY_CONF_DIR}/3x-ui-admin-panel.conf"
+    reverse_proxy_domain_in_use "$panel_domain" "$conf_path" && return 1
     echo -e "${blue}本操作只配置反向代理与证书，不会下载或更新 X-UI 安装包。${plain}"
     previous_conf=$(mktemp)
     had_previous="false"
@@ -3968,6 +4026,7 @@ EOF
     # Keep control in the customer-portal submenu; do not open a nested main
     # menu where a later numeric choice could accidentally trigger an update.
     restart 0
+    echo -e "${green}证书已自动部署到 Nginx，管理后台本地监听设置已写入面板。${plain}"
     echo -e "${green}管理后台反代配置完成：https://${panel_domain}${base_path}${plain}"
     echo -e "${blue}后端仅监听：127.0.0.1:${panel_port}${plain}"
 }
