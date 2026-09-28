@@ -3538,7 +3538,7 @@ customer_portal_secure_mode() {
                 echo -e "${red}写入本地监听设置失败，未更改服务。${plain}"
                 return 1
             fi
-            restart
+            restart 0
             echo -e "${green}已启用安全模式。管理后台监听 127.0.0.1:${current_port}，客户门户监听 127.0.0.1:${portal_port}。${plain}"
             echo -e "管理员 SSH 隧道：${yellow}ssh -L 2222:127.0.0.1:${current_port} root@服务器公网IP${plain}"
             echo -e "隧道建立后访问：${yellow}http://127.0.0.1:2222${plain}"
@@ -3550,7 +3550,7 @@ customer_portal_secure_mode() {
                 echo -e "${red}恢复公网监听设置失败。${plain}"
                 return 1
             fi
-            restart
+            restart 0
             echo -e "${green}已恢复公网监听：后台 0.0.0.0:${current_port}，客户门户 0.0.0.0:${portal_port}。${plain}"
             ;;
         0) return 0 ;;
@@ -3614,6 +3614,7 @@ ensure_reverse_proxy_nginx() {
     elif command -v rc-update > /dev/null 2>&1; then
         rc-update add nginx default > /dev/null 2>&1 || true
     fi
+    echo -e "${green}已复用现有 Nginx：${REVERSE_PROXY_NGINX_BIN}${plain}"
 }
 
 reload_reverse_proxy_nginx() {
@@ -3698,6 +3699,32 @@ reverse_proxy_domain_in_use() {
     return 1
 }
 
+show_reverse_proxy_domain_matches() {
+    local domain="$1"
+    local matches
+    matches=$("$REVERSE_PROXY_NGINX_BIN" -T 2>&1 | awk -v wanted="$domain" '
+        /^# configuration file / {
+            file=$0
+            sub(/^# configuration file /, "", file)
+            sub(/:$/, "", file)
+        }
+        /^[[:space:]]*server_name[[:space:]]/ {
+            line=$0
+            gsub(/;/, "", line)
+            count=split(line, names, /[[:space:]]+/)
+            for (i=2; i<=count; i++) {
+                if (names[i] == wanted) {
+                    if (!seen[file]++) print file
+                }
+            }
+        }
+    ')
+    if [[ -n "$matches" ]]; then
+        echo -e "${yellow}Nginx 中匹配该域名的配置文件：${plain}"
+        echo "$matches" | sed 's/^/  - /'
+    fi
+}
+
 ensure_reverse_proxy_certificate() {
     local domain="$1"
     local cert_dir="/root/cert/reverse-proxy/${domain}"
@@ -3726,12 +3753,20 @@ ensure_reverse_proxy_certificate() {
         echo -e "${red}acme.sh 安装完成后仍未找到 /root/.acme.sh/acme.sh。${plain}"
         return 1
     fi
+    echo -e "${green}已复用现有 acme.sh：${acme_bin}${plain}"
     mkdir -p "$cert_dir"
     "$acme_bin" --set-default-ca --server letsencrypt --force > /dev/null 2>&1
-    echo -e "${yellow}正在通过 Nginx 验证域名并申请证书：${domain}${plain}"
-    if ! "$acme_bin" --issue -d "$domain" --webroot /var/www/3x-ui-acme --server letsencrypt; then
+    echo -e "${yellow}正在使用 Nginx 模式验证域名并申请证书：${domain}${plain}"
+    # Nginx mode temporarily injects the HTTP-01 route into the virtual host
+    # that is actually serving this domain, then restores that file.  This is
+    # more reliable than a fixed webroot when an older same-domain vhost is
+    # already active: the latter wins Nginx's server-name selection and turns
+    # an otherwise valid challenge request into a misleading 404.
+    if ! PATH="$(dirname "$REVERSE_PROXY_NGINX_BIN"):${PATH}" "$acme_bin" --issue -d "$domain" --nginx --server letsencrypt --force; then
         if [[ ! -s /root/.acme.sh/${domain}_ecc/fullchain.cer && ! -s /root/.acme.sh/${domain}/fullchain.cer ]]; then
-            echo -e "${red}证书申请失败。请确认域名已解析到本机，并且公网 80 端口可访问 Nginx。${plain}"
+            echo -e "${red}证书申请失败。域名验证没有通过，X-UI 本体未被下载或重装。${plain}"
+            show_reverse_proxy_domain_matches "$domain"
+            echo -e "${yellow}请确认域名只解析到本机，并且公网 80 端口能够访问当前 Nginx。${plain}"
             return 1
         fi
     fi
@@ -3750,9 +3785,6 @@ ensure_reverse_proxy_certificate() {
 }
 
 customer_portal_proxy_menu() {
-    ensure_reverse_proxy_nginx || return 1
-    write_reverse_proxy_snippet
-
     local settings portal_port portal_enabled portal_domain conf_path temp_conf backend_scheme backend_url cert_config key_config public_url previous_conf had_previous
     settings=$(${xui_folder}/x-ui setting -show true 2>/dev/null)
     portal_port=$(echo "$settings" | awk -F': ' '/^portalPort:/{print $2}' | tr -d '[:space:]')
@@ -3776,6 +3808,11 @@ customer_portal_proxy_menu() {
     fi
     conf_path="/etc/nginx/conf.d/3x-ui-customer-portal.conf"
     reverse_proxy_domain_in_use "$portal_domain" "$conf_path" && return 1
+    # Do not install or download anything merely because the menu item was
+    # opened.  Dependency checks start only after a valid domain is submitted.
+    ensure_reverse_proxy_nginx || return 1
+    write_reverse_proxy_snippet
+    echo -e "${blue}本操作只配置反向代理与证书，不会下载或更新 X-UI 安装包。${plain}"
     previous_conf=$(mktemp)
     had_previous="false"
     if [[ -f "$conf_path" ]]; then
@@ -3838,15 +3875,15 @@ EOF
         return 1
     fi
     rm -f "$previous_conf"
-    restart
+    # Keep control in the customer-portal submenu.  Calling restart without an
+    # argument opens another main menu; the next submenu choice (especially 2)
+    # can then be consumed as "update" and unexpectedly download the panel.
+    restart 0
     echo -e "${green}客户门户反代配置完成：${public_url}${plain}"
     echo -e "${blue}后端仅监听：127.0.0.1:${portal_port}${plain}"
 }
 
 admin_panel_proxy_menu() {
-    ensure_reverse_proxy_nginx || return 1
-    write_reverse_proxy_snippet
-
     local settings panel_port panel_domain base_path conf_path temp_conf backend_scheme backend_url cert_config key_config previous_conf had_previous
     settings=$(${xui_folder}/x-ui setting -show true 2>/dev/null)
     panel_port=$(echo "$settings" | awk -F': ' '/^port:/{print $2}' | tr -d '[:space:]')
@@ -3869,6 +3906,11 @@ admin_panel_proxy_menu() {
     fi
     conf_path="/etc/nginx/conf.d/3x-ui-admin-panel.conf"
     reverse_proxy_domain_in_use "$panel_domain" "$conf_path" && return 1
+    # Do not install or download anything merely because the menu item was
+    # opened.  Dependency checks start only after a valid domain is submitted.
+    ensure_reverse_proxy_nginx || return 1
+    write_reverse_proxy_snippet
+    echo -e "${blue}本操作只配置反向代理与证书，不会下载或更新 X-UI 安装包。${plain}"
     previous_conf=$(mktemp)
     had_previous="false"
     if [[ -f "$conf_path" ]]; then
@@ -3923,7 +3965,9 @@ EOF
         return 1
     fi
     rm -f "$previous_conf"
-    restart
+    # Keep control in the customer-portal submenu; do not open a nested main
+    # menu where a later numeric choice could accidentally trigger an update.
+    restart 0
     echo -e "${green}管理后台反代配置完成：https://${panel_domain}${base_path}${plain}"
     echo -e "${blue}后端仅监听：127.0.0.1:${panel_port}${plain}"
 }
