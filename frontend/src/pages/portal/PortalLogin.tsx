@@ -1,22 +1,24 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, ConfigProvider, Form, Input, Layout, Menu, Popover, Space, message } from 'antd';
-import {
-  CheckCircleFilled,
-  GlobalOutlined,
-  LockOutlined,
-  LoginOutlined,
-  SafetyCertificateFilled,
-  ThunderboltFilled,
-  TranslationOutlined,
-  UserOutlined,
-} from '@ant-design/icons';
+import { Button, ConfigProvider, Form, Input, Layout, Menu, Popover, message } from 'antd';
 
 import { FormProvider, useForm } from 'react-hook-form';
 import { HttpUtil, LanguageManager } from '@/utils';
 import { FormField, rhfZodValidate } from '@/components/form/rhf';
 import { setMessageInstance } from '@/utils/messageBus';
 import { PortalLoginSchema, type PortalLoginValues, type PortalPlans } from './portalModel';
+import {
+  PortalArrowIcon,
+  PortalBoltIcon,
+  PortalBrandMark,
+  PortalChevronIcon,
+  PortalLanguageIcon,
+  PortalLockIcon,
+  PortalServicesIcon,
+  PortalShieldIcon,
+  PortalStatusIcon,
+  PortalUserIcon,
+} from './PortalLoginIcons';
 import { portalTheme } from './portalTheme';
 import './PortalPage.css';
 
@@ -42,10 +44,12 @@ export default function PortalLogin({ plans, onDone }: PortalLoginProps) {
   const [submitting, setSubmitting] = useState(false);
   const methods = useForm<PortalLoginValues>({ defaultValues: { username: '', password: '' } });
   const [lang, setLang] = useState<string>(() => LanguageManager.getLanguage('subscription'));
+  const [languageOpen, setLanguageOpen] = useState(false);
 
   const onLangChange = (next: string) => {
     setLang(next);
     LanguageManager.setLanguage(next, 'subscription');
+    setLanguageOpen(false);
   };
 
   const onSubmit = async (values: PortalLoginValues) => {
@@ -68,10 +72,12 @@ export default function PortalLogin({ plans, onDone }: PortalLoginProps) {
         (item) => ({
           key: item.value,
           label: (
-            <Space size={8}>
-              <span aria-hidden="true">{item.icon}</span>
+            <span className="portal-language-option">
+              <span className="portal-language-code" aria-hidden="true">
+                {item.value.split('-')[0].toUpperCase()}
+              </span>
               <span>{item.name}</span>
-            </Space>
+            </span>
           ),
         }),
       ),
@@ -91,8 +97,8 @@ export default function PortalLogin({ plans, onDone }: PortalLoginProps) {
           <div className="portal-login-layout">
             <section className="portal-login-story" aria-label={title}>
               <div className="portal-login-brand">
-                <span className="portal-login-logo" aria-hidden="true">
-                  <SafetyCertificateFilled />
+                <span className="portal-login-logo">
+                  <PortalBrandMark />
                 </span>
                 <span>
                   <strong>{title}</strong>
@@ -101,22 +107,28 @@ export default function PortalLogin({ plans, onDone }: PortalLoginProps) {
               </div>
               <div className="portal-login-story-copy">
                 <span className="portal-login-eyebrow">
-                  <CheckCircleFilled /> {t('portal.loginStatus')}
+                  <PortalStatusIcon /> {t('portal.loginStatus')}
                 </span>
                 <h1>{t('portal.loginHeroTitle')}</h1>
                 <p>{t('portal.loginHeroDescription')}</p>
               </div>
               <div className="portal-login-benefits">
                 <span>
-                  <GlobalOutlined />
+                  <i className="is-blue">
+                    <PortalServicesIcon />
+                  </i>
                   <b>{t('portal.loginBenefitNodes')}</b>
                 </span>
                 <span>
-                  <ThunderboltFilled />
+                  <i className="is-violet">
+                    <PortalBoltIcon />
+                  </i>
                   <b>{t('portal.loginBenefitFast')}</b>
                 </span>
                 <span>
-                  <SafetyCertificateFilled />
+                  <i className="is-teal">
+                    <PortalShieldIcon />
+                  </i>
                   <b>{t('portal.loginBenefitSecure')}</b>
                 </span>
               </div>
@@ -131,8 +143,10 @@ export default function PortalLogin({ plans, onDone }: PortalLoginProps) {
                 </div>
                 <Popover
                   rootClassName="light portal-language-popover"
-                  placement="bottomRight"
+                  placement={direction === 'rtl' ? 'bottomLeft' : 'bottomRight'}
                   trigger="click"
+                  open={languageOpen}
+                  onOpenChange={setLanguageOpen}
                   styles={{ content: { padding: 4 } }}
                   content={
                     <Menu
@@ -148,10 +162,10 @@ export default function PortalLogin({ plans, onDone }: PortalLoginProps) {
                   <Button
                     className="portal-login-language"
                     aria-label={t('pages.settings.language')}
-                    icon={<TranslationOutlined />}
                   >
-                    <span aria-hidden="true">{currentLanguage?.icon}</span>
+                    <PortalLanguageIcon className="portal-login-language-icon" />
                     <span>{currentLanguage?.name}</span>
+                    <PortalChevronIcon className="portal-login-language-chevron" />
                   </Button>
                 </Popover>
               </div>
@@ -168,7 +182,11 @@ export default function PortalLogin({ plans, onDone }: PortalLoginProps) {
                     rules={{ validate: rhfZodValidate(PortalLoginSchema.shape.username) }}
                   >
                     <Input
-                      prefix={<UserOutlined />}
+                      prefix={
+                        <span className="portal-field-icon">
+                          <PortalUserIcon />
+                        </span>
+                      }
                       autoComplete="username"
                       size="large"
                       placeholder={t('portal.usernamePlaceholder')}
@@ -182,7 +200,11 @@ export default function PortalLogin({ plans, onDone }: PortalLoginProps) {
                     rules={{ validate: rhfZodValidate(PortalLoginSchema.shape.password) }}
                   >
                     <Input.Password
-                      prefix={<LockOutlined />}
+                      prefix={
+                        <span className="portal-field-icon">
+                          <PortalLockIcon />
+                        </span>
+                      }
                       autoComplete="current-password"
                       size="large"
                       placeholder={t('portal.passwordPlaceholder')}
@@ -196,15 +218,18 @@ export default function PortalLogin({ plans, onDone }: PortalLoginProps) {
                       loading={submitting}
                       size="large"
                       block
-                      icon={<LoginOutlined />}
                     >
-                      {t('login')}
+                      <span>{t('login')}</span>
+                      <PortalArrowIcon className="portal-login-submit-icon" />
                     </Button>
                   </Form.Item>
                 </Form>
               </FormProvider>
               <p className="portal-login-footnote">
-                <SafetyCertificateFilled /> {t('portal.loginFootnote')}
+                <span />
+                <PortalShieldIcon />
+                {t('portal.loginFootnote')}
+                <span />
               </p>
             </section>
           </div>
