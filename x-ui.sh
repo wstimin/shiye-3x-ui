@@ -3563,8 +3563,11 @@ customer_portal_secure_mode() {
 # private. The original SSL menu remains responsible for direct-panel TLS.
 REVERSE_PROXY_CERT_FILE=""
 REVERSE_PROXY_KEY_FILE=""
+REVERSE_PROXY_NGINX_BIN=""
 
 ensure_reverse_proxy_nginx() {
+    PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH}"
+    export PATH
     if ! command -v nginx > /dev/null 2>&1; then
         echo -e "${yellow}未检测到 Nginx，正在自动安装...${plain}"
         case "${release}" in
@@ -3601,6 +3604,11 @@ ensure_reverse_proxy_nginx() {
         }
         echo -e "${green}Nginx 安装完成。${plain}"
     fi
+    REVERSE_PROXY_NGINX_BIN=$(command -v nginx 2> /dev/null)
+    if [[ -z "$REVERSE_PROXY_NGINX_BIN" || ! -x "$REVERSE_PROXY_NGINX_BIN" ]]; then
+        echo -e "${red}无法确定 Nginx 可执行文件位置。${plain}"
+        return 1
+    fi
     if command -v systemctl > /dev/null 2>&1; then
         systemctl enable nginx > /dev/null 2>&1 || true
     elif command -v rc-update > /dev/null 2>&1; then
@@ -3617,8 +3625,8 @@ reload_reverse_proxy_nginx() {
         rc-service nginx reload > /dev/null 2>&1
         return $?
     fi
-    nginx -s reload > /dev/null 2>&1 && return 0
-    nginx > /dev/null 2>&1
+    "$REVERSE_PROXY_NGINX_BIN" -s reload > /dev/null 2>&1 && return 0
+    "$REVERSE_PROXY_NGINX_BIN" > /dev/null 2>&1
 }
 
 write_reverse_proxy_snippet() {
@@ -3649,7 +3657,7 @@ apply_reverse_proxy_config() {
     fi
     install -m 644 "$temp_conf" "$conf_path"
     rm -f "$temp_conf"
-    if nginx -t > /dev/null 2>&1 && reload_reverse_proxy_nginx; then
+    if "$REVERSE_PROXY_NGINX_BIN" -t > /dev/null 2>&1 && reload_reverse_proxy_nginx; then
         [[ -n "$backup_path" ]] && rm -f "$backup_path"
         return 0
     fi
@@ -3659,7 +3667,7 @@ apply_reverse_proxy_config() {
     else
         rm -f "$conf_path"
     fi
-    nginx -t > /dev/null 2>&1 && reload_reverse_proxy_nginx > /dev/null 2>&1 || true
+    "$REVERSE_PROXY_NGINX_BIN" -t > /dev/null 2>&1 && reload_reverse_proxy_nginx > /dev/null 2>&1 || true
     return 1
 }
 
@@ -3673,7 +3681,7 @@ restore_reverse_proxy_previous() {
         rm -f "$conf_path"
     fi
     rm -f "$previous_conf"
-    nginx -t > /dev/null 2>&1 && reload_reverse_proxy_nginx > /dev/null 2>&1 || true
+    "$REVERSE_PROXY_NGINX_BIN" -t > /dev/null 2>&1 && reload_reverse_proxy_nginx > /dev/null 2>&1 || true
 }
 
 reverse_proxy_domain_in_use() {
@@ -3695,7 +3703,8 @@ ensure_reverse_proxy_certificate() {
     local cert_dir="/root/cert/reverse-proxy/${domain}"
     local cert_file="${cert_dir}/fullchain.pem"
     local key_file="${cert_dir}/privkey.pem"
-    local reload_cmd="systemctl reload nginx 2>/dev/null || nginx -s reload 2>/dev/null || rc-service nginx reload 2>/dev/null"
+    local acme_bin="/root/.acme.sh/acme.sh"
+    local reload_cmd="systemctl reload nginx 2>/dev/null || ${REVERSE_PROXY_NGINX_BIN} -s reload 2>/dev/null || rc-service nginx reload 2>/dev/null"
     REVERSE_PROXY_CERT_FILE="$cert_file"
     REVERSE_PROXY_KEY_FILE="$key_file"
 
@@ -3706,20 +3715,27 @@ ensure_reverse_proxy_certificate() {
         fi
     fi
 
-    if ! command -v ~/.acme.sh/acme.sh > /dev/null 2>&1; then
+    if [[ ! -x "$acme_bin" ]]; then
         echo -e "${yellow}正在自动安装 acme.sh...${plain}"
-        install_acme || return 1
+        if ! curl -fsSL https://get.acme.sh | HOME=/root sh; then
+            echo -e "${red}acme.sh 自动安装失败，请检查网络。${plain}"
+            return 1
+        fi
+    fi
+    if [[ ! -x "$acme_bin" ]]; then
+        echo -e "${red}acme.sh 安装完成后仍未找到 /root/.acme.sh/acme.sh。${plain}"
+        return 1
     fi
     mkdir -p "$cert_dir"
-    ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt --force > /dev/null 2>&1
+    "$acme_bin" --set-default-ca --server letsencrypt --force > /dev/null 2>&1
     echo -e "${yellow}正在通过 Nginx 验证域名并申请证书：${domain}${plain}"
-    if ! ~/.acme.sh/acme.sh --issue -d "$domain" --webroot /var/www/3x-ui-acme --server letsencrypt; then
-        if [[ ! -s ~/.acme.sh/${domain}_ecc/fullchain.cer && ! -s ~/.acme.sh/${domain}/fullchain.cer ]]; then
+    if ! "$acme_bin" --issue -d "$domain" --webroot /var/www/3x-ui-acme --server letsencrypt; then
+        if [[ ! -s /root/.acme.sh/${domain}_ecc/fullchain.cer && ! -s /root/.acme.sh/${domain}/fullchain.cer ]]; then
             echo -e "${red}证书申请失败。请确认域名已解析到本机，并且公网 80 端口可访问 Nginx。${plain}"
             return 1
         fi
     fi
-    ~/.acme.sh/acme.sh --installcert --force -d "$domain" \
+    "$acme_bin" --installcert --force -d "$domain" \
         --key-file "$key_file" \
         --fullchain-file "$cert_file" \
         --reloadcmd "$reload_cmd" || true
@@ -3729,7 +3745,7 @@ ensure_reverse_proxy_certificate() {
     fi
     chmod 600 "$key_file"
     chmod 644 "$cert_file"
-    ~/.acme.sh/acme.sh --upgrade --auto-upgrade > /dev/null 2>&1 || true
+    "$acme_bin" --upgrade --auto-upgrade > /dev/null 2>&1 || true
     echo -e "${green}证书申请成功，续期任务已启用。${plain}"
 }
 
